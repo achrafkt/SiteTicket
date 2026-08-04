@@ -1,0 +1,10 @@
+node_modules/
+backend/node_modules/
+web/node_modules/
+backend/dist/
+backend/.env
+web/.env.local
+web/.next/
+coverage/
+.DS_Store
+.vscode/

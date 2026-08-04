@@ -1,0 +1,243 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RoleCode {
+  admin
+  moa
+  moe
+  conducteur_travaux
+  chef_chantier
+  sous_traitant
+  qse
+  observateur
+}
+
+enum ProjectStatus {
+  preparation
+  actif
+  suspendu
+  termine
+  archive
+}
+
+enum TicketTypeCode {
+  RFI
+  PUNCH
+  CHANGE_ORDER
+  SAFETY
+  MAINTENANCE
+  SUBMITTAL
+  FIELD_ISSUE
+}
+
+enum TicketStatusCode {
+  NEW
+  ASSIGNED
+  IN_PROGRESS
+  PENDING
+  RESOLVED
+  CLOSED
+  REOPENED
+}
+
+enum TicketPriority {
+  low
+  medium
+  high
+  critical
+}
+
+model User {
+  id               String                @id @default(uuid()) @db.Uuid
+  role_id          String                @db.Uuid
+  first_name       String
+  last_name        String
+  email            String                @unique
+  phone            String?
+  password_hash    String
+  is_active        Boolean               @default(true)
+  last_login_at    DateTime?
+  created_at       DateTime              @default(now())
+  updated_at       DateTime              @updatedAt
+  role             Role                  @relation(fields: [role_id], references: [id])
+  project_members  ProjectMember[]
+  created_tickets  Ticket[]              @relation("TicketCreatedBy")
+  assigned_tickets Ticket[]              @relation("TicketAssignedTo")
+  ticket_comments  TicketComment[]
+  ticket_files     TicketAttachment[]    @relation("TicketAttachmentUploadedBy")
+  status_changes   TicketStatusHistory[] @relation("TicketStatusHistoryChangedBy")
+  uploaded_plans   Plan[]                @relation("PlanUploadedBy")
+
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        RoleCode @unique
+  name        String
+  description String?
+  users       User[]
+
+  @@map("roles")
+}
+
+model Project {
+  id               String         @id @default(uuid()) @db.Uuid
+  name             String
+  code             String         @unique
+  address          String?
+  client_name      String?
+  status           ProjectStatus  @default(preparation)
+  start_date       DateTime?
+  end_date_planned DateTime?
+  end_date_actual  DateTime?
+  created_at       DateTime       @default(now())
+  members          ProjectMember[]
+  tickets          Ticket[]
+  plans            Plan[]
+
+  @@map("projects")
+}
+
+model ProjectMember {
+  id              String   @id @default(uuid()) @db.Uuid
+  project_id      String   @db.Uuid
+  user_id         String   @db.Uuid
+  role_on_project String?
+  added_at        DateTime @default(now())
+  project         Project  @relation(fields: [project_id], references: [id])
+  user            User     @relation(fields: [user_id], references: [id])
+
+  @@unique([project_id, user_id])
+  @@map("project_members")
+}
+
+model TicketType {
+  id                      String         @id @default(uuid()) @db.Uuid
+  code                    TicketTypeCode @unique
+  name                    String
+  description             String?
+  requires_approval_chain Boolean        @default(false)
+  tickets                 Ticket[]
+
+  @@map("ticket_types")
+}
+
+model TicketStatus {
+  id               String                @id @default(uuid()) @db.Uuid
+  code             TicketStatusCode      @unique
+  name             String
+  sort_order       Int
+  is_terminal      Boolean               @default(false)
+  tickets          Ticket[]
+  transitions_from TicketStatusHistory[] @relation("StatusHistoryFrom")
+  transitions_to   TicketStatusHistory[] @relation("StatusHistoryTo")
+
+  @@map("ticket_statuses")
+}
+
+model Ticket {
+  id                   String                @id @default(uuid()) @db.Uuid
+  ticket_number        String                @unique
+  project_id           String                @db.Uuid
+  ticket_type_id       String                @db.Uuid
+  status_id            String                @db.Uuid
+  title                String
+  description          String?
+  priority             TicketPriority        @default(medium)
+  is_blocking          Boolean               @default(false)
+  location_zone        String?
+  plan_id              String?               @db.Uuid
+  plan_x               Float?
+  plan_y               Float?
+  plan_page            Int?
+  trade                String?
+  created_by           String                @db.Uuid
+  assigned_to          String?               @db.Uuid
+  external_party       String?
+  cost_impact_amount   Decimal?              @db.Decimal(12, 2)
+  schedule_impact_days Int?
+  due_date             DateTime?
+  resolved_at          DateTime?
+  closed_at            DateTime?
+  created_at           DateTime              @default(now())
+  updated_at           DateTime              @updatedAt
+  project              Project               @relation(fields: [project_id], references: [id])
+  ticket_type          TicketType            @relation(fields: [ticket_type_id], references: [id])
+  status               TicketStatus          @relation(fields: [status_id], references: [id])
+  plan                 Plan?                 @relation(fields: [plan_id], references: [id])
+  created_by_user      User                  @relation("TicketCreatedBy", fields: [created_by], references: [id])
+  assigned_to_user     User?                 @relation("TicketAssignedTo", fields: [assigned_to], references: [id])
+  comments             TicketComment[]
+  attachments          TicketAttachment[]
+  status_history       TicketStatusHistory[]
+
+  @@map("tickets")
+}
+
+model TicketComment {
+  id           String   @id @default(uuid()) @db.Uuid
+  ticket_id    String   @db.Uuid
+  user_id      String   @db.Uuid
+  comment_text String
+  is_internal  Boolean  @default(true)
+  created_at   DateTime @default(now())
+  ticket       Ticket   @relation(fields: [ticket_id], references: [id])
+  user         User     @relation(fields: [user_id], references: [id])
+
+  @@map("ticket_comments")
+}
+
+model TicketAttachment {
+  id          String   @id @default(uuid()) @db.Uuid
+  ticket_id   String   @db.Uuid
+  file_url    String
+  file_type   String?
+  uploaded_by String   @db.Uuid
+  uploaded_at DateTime @default(now())
+  geo_lat     Float?
+  geo_lng     Float?
+  ticket      Ticket   @relation(fields: [ticket_id], references: [id])
+  uploader    User     @relation("TicketAttachmentUploadedBy", fields: [uploaded_by], references: [id])
+
+  @@map("ticket_attachments")
+}
+
+model TicketStatusHistory {
+  id              String        @id @default(uuid()) @db.Uuid
+  ticket_id       String        @db.Uuid
+  from_status_id  String?       @db.Uuid
+  to_status_id    String        @db.Uuid
+  changed_by      String        @db.Uuid
+  comment         String?
+  changed_at      DateTime      @default(now())
+  ticket          Ticket        @relation(fields: [ticket_id], references: [id])
+  from_status     TicketStatus? @relation("StatusHistoryFrom", fields: [from_status_id], references: [id])
+  to_status       TicketStatus  @relation("StatusHistoryTo", fields: [to_status_id], references: [id])
+  changed_by_user User          @relation("TicketStatusHistoryChangedBy", fields: [changed_by], references: [id])
+
+  @@map("ticket_status_history")
+}
+
+model Plan {
+  id          String   @id @default(uuid()) @db.Uuid
+  project_id  String   @db.Uuid
+  name        String
+  discipline  String?
+  file_url    String
+  file_type   String?
+  version     String?
+  uploaded_by String   @db.Uuid
+  uploaded_at DateTime @default(now())
+  project     Project  @relation(fields: [project_id], references: [id])
+  uploader    User     @relation("PlanUploadedBy", fields: [uploaded_by], references: [id])
+  tickets     Ticket[]
+
+  @@map("plans")
+}
