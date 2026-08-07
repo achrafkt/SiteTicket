@@ -1,3 +1,39 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --color-nav-bg: #0b1f3a;
+  --color-nav-bg-active: #14315a;
+  --color-nav-accent: #3b82f6;
+
+  --color-status-todo: #6b7280;
+  --color-status-todo-bg: #f3f4f6;
+  --color-status-in-progress: #2563eb;
+  --color-status-in-progress-bg: #eff6ff;
+  --color-status-done: #15803d;
+  --color-status-done-bg: #f0fdf4;
+  --color-status-blocked: #dc2626;
+  --color-status-blocked-bg: #fef2f2;
+  --color-status-waiting: #d97706;
+  --color-status-waiting-bg: #fffbeb;
+
+  --color-priority-low: #22c55e;
+  --color-priority-medium: #eab308;
+  --color-priority-high: #f97316;
+  --color-priority-urgent: #dc2626;
+
+  /* Helpdesk visual scale tokens */
+  --text-ui-xs: 0.72rem;
+  --text-ui-sm: 0.86rem;
+  --text-ui-md: 0.94rem;
+  --space-ui-1: 0.4rem;
+  --space-ui-2: 0.65rem;
+  --space-ui-3: 0.9rem;
+  --space-ui-4: 1.15rem;
+  --radius-ui: 0.85rem;
+}
+
 :root {
   --background: #f2efe8;
   --foreground: #1f1b16;
@@ -34,10 +70,12 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
+@layer base {
+  * {
+    box-sizing: border-box;
+    padding: 0;
+    margin: 0;
+  }
 }
 
 a {
@@ -77,7 +115,7 @@ a {
   margin-bottom: 12px;
 }
 
-h1 {
+.hero-card h1 {
   font-size: clamp(2.3rem, 6vw, 4.5rem);
   line-height: 0.98;
   max-width: 12ch;
@@ -198,7 +236,7 @@ h1 {
     border-radius: 22px;
   }
 
-  h1 {
+  .hero-card h1 {
     max-width: none;
   }
 }

@@ -14,6 +14,12 @@ export default function Home() {
           <Link className="primary-link" href="/login">
             Open login page
           </Link>
+          <Link className="secondary-link" href="/tickets">
+            Open tickets
+          </Link>
+          <Link className="secondary-link" href="/helpdesk">
+            Open helpdesk UI (mock)
+          </Link>
           <a className="secondary-link" href="http://localhost:3001/health">
             API health
           </a>

@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { FormEvent, useState } from 'react';
 
 type LoginResponse = {
@@ -19,6 +20,7 @@ type LoginResponse = {
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState('admin@site-ticket.local');
   const [password, setPassword] = useState('Admin1234!');
   const [loading, setLoading] = useState(false);
@@ -52,6 +54,7 @@ export default function LoginPage() {
       const loginResponse = payload as LoginResponse;
       localStorage.setItem('site-ticket-token', loginResponse.accessToken);
       setResult(loginResponse);
+      router.push('/');
     } catch (submitError) {
       setResult(null);
       setError(
