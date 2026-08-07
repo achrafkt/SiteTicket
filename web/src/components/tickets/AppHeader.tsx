@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { Search, ChevronDown, HelpCircle, Bell, Plus } from "lucide-react";
 import {
   FileQuestion,
@@ -30,11 +32,18 @@ const CREATE_OPTION_ICONS: Record<TicketTypeCode, React.ElementType> = {
 };
 
 export function AppHeader() {
+  const router = useRouter();
   const [isCreateMenuOpen, setCreateMenuOpen] = useState(false);
   const [isUserMenuOpen, setUserMenuOpen] = useState(false);
   const [globalSearch, setGlobalSearch] = useState("");
   const createRef = useRef<HTMLDivElement>(null);
   const userRef = useRef<HTMLDivElement>(null);
+
+  function handleLogout() {
+    localStorage.removeItem("site-ticket-token");
+    setUserMenuOpen(false);
+    router.push("/login");
+  }
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -55,8 +64,17 @@ export function AppHeader() {
   return (
     <header className="relative z-30 flex h-16 shrink-0 items-center gap-3  bg-nav-bg pr-4 text-white shadow-[0_10px_28px_rgba(8,26,77,0.32)]">
       <div className="flex w-16 shrink-0 items-center justify-center">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/16 text-sm font-extrabold shadow-[inset_0_0_0_1px_rgba(255,255,255,0.2)]">
-          ST
+        <div className="flex w-16 shrink-0 items-center justify-center">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/95 p-1.5 shadow-[0_4px_12px_rgba(0,0,0,0.15)]">
+            <Image
+              src="/logo/logo-icon.png"
+              alt="SiteTicket"
+              width={36}
+              height={36}
+              className="h-full w-full object-contain"
+              priority
+            />
+          </div>
         </div>
       </div>
       <span className="-ml-2 shrink-0 text-sm font-semibold tracking-[0.08em] text-white/95">
@@ -162,6 +180,7 @@ export function AppHeader() {
               </button>
               <button
                 type="button"
+                onClick={handleLogout}
                 className="block w-full px-3.5 py-2 text-left text-xs font-medium hover:bg-slate-50"
               >
                 Déconnexion

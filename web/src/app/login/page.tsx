@@ -1,7 +1,11 @@
-'use client';
+"use client";
 
-import { useRouter } from 'next/navigation';
-import { FormEvent, useState } from 'react';
+import { useRouter } from "next/navigation";
+import { FormEvent, useState } from "react";
+import Link from "next/link";
+import Image from "next/image";
+import { Mail, Lock, Eye } from "lucide-react";
+import styles from "./login.module.css";
 
 type LoginResponse = {
   accessToken: string;
@@ -17,15 +21,14 @@ type LoginResponse = {
   };
 };
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('admin@site-ticket.local');
-  const [password, setPassword] = useState('Admin1234!');
+  const [email, setEmail] = useState("admin@site-ticket.local");
+  const [password, setPassword] = useState("Admin1234!");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<LoginResponse | null>(null);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -34,33 +37,33 @@ export default function LoginPage() {
 
     try {
       const response = await fetch(`${apiUrl}/auth/login`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({ email, password }),
       });
 
-      const payload = (await response.json()) as LoginResponse | { message?: string };
+      const payload = (await response.json()) as
+        | LoginResponse
+        | { message?: string };
 
       if (!response.ok) {
         throw new Error(
-          typeof payload === 'object' && payload && 'message' in payload
-            ? String(payload.message ?? 'Connexion impossible.')
-            : 'Connexion impossible.',
+          typeof payload === "object" && payload && "message" in payload
+            ? String(payload.message ?? "Connexion impossible.")
+            : "Connexion impossible.",
         );
       }
 
       const loginResponse = payload as LoginResponse;
-      localStorage.setItem('site-ticket-token', loginResponse.accessToken);
-      setResult(loginResponse);
-      router.push('/');
+      localStorage.setItem("site-ticket-token", loginResponse.accessToken);
+      router.push("/helpdesk");
     } catch (submitError) {
-      setResult(null);
       setError(
         submitError instanceof Error
           ? submitError.message
-          : 'Connexion impossible.',
+          : "Connexion impossible.",
       );
     } finally {
       setLoading(false);
@@ -68,58 +71,95 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="shell auth-shell">
-      <section className="auth-card">
-        <div>
-          <p className="eyebrow">Internal access</p>
-          <h1>Sign in to SiteTicket</h1>
-          <p className="hero-copy">
-            This page calls the NestJS API directly and stores the returned JWT
-            in local storage.
-          </p>
-        </div>
+    <main className={styles.viewport}>
+      <section className={styles.authCard}>
+        <aside className={styles.visualPane} aria-hidden="true">
+          <Image
+            src="/illustrations/login-illustration.svg"
+            alt=""
+            fill
+            className={styles.visualImage}
+            priority
+          />
+        </aside>
 
-        <form className="auth-form" onSubmit={handleSubmit}>
-          <label>
-            <span>Email</span>
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="admin@site-ticket.local"
-              autoComplete="email"
-              required
-            />
-          </label>
-
-          <label>
-            <span>Password</span>
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="Admin1234!"
-              autoComplete="current-password"
-              required
-            />
-          </label>
-
-          <button type="submit" disabled={loading}>
-            {loading ? 'Signing in...' : 'Login'}
-          </button>
-        </form>
-
-        {error ? <p className="feedback error">{error}</p> : null}
-
-        {result ? (
-          <div className="feedback success">
-            <p>
-              Connected as {result.user.first_name} {result.user.last_name}.
-            </p>
-            <p>Role: {result.user.role.name}</p>
-            <p>JWT saved under site-ticket-token.</p>
+        <div className={styles.formPane}>
+          <div className={styles.brandBlock}>
+            <div className={styles.brandBlock}>
+              <Image
+                src="/logo/logo-icon.png"
+                alt="SiteTicket"
+                width={72}
+                height={72}
+                className={styles.brandIcon}
+                priority
+              />
+              <p className={styles.brandText}>SiteTicket</p>
+            </div>
           </div>
-        ) : null}
+
+          <div className={styles.headingBlock}>
+            <h1>Connexion</h1>
+            <p>Accédez à votre espace de gestion de chantier</p>
+          </div>
+
+          <form className={styles.form} onSubmit={handleSubmit}>
+            <label className={styles.fieldLabel} htmlFor="email">
+              Email
+            </label>
+            <div className={styles.inputWrap}>
+              <Mail size={18} />
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="nom@entreprise.com"
+                autoComplete="email"
+                required
+              />
+            </div>
+
+            <label className={styles.fieldLabel} htmlFor="password">
+              Mot de passe
+            </label>
+            <div className={styles.inputWrap}>
+              <Lock size={18} />
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="Entrez votre mot de passe"
+                autoComplete="current-password"
+                required
+              />
+              <Eye size={18} />
+            </div>
+
+            <div className={styles.forgotRow}>
+              <a href="#">Mot de passe oublié ?</a>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className={styles.signInButton}
+            >
+              {loading ? "Connexion en cours..." : "Se connecter"}
+            </button>
+
+            {error ? <p className={styles.errorMessage}>{error}</p> : null}
+          </form>
+
+          <div className={styles.footerLinks}>
+            <Link href="/">Accueil</Link>
+            <span aria-hidden="true" className={styles.separator}>
+              |
+            </span>
+            <a href="mailto:support@site-ticket.local">Support</a>
+          </div>
+        </div>
       </section>
     </main>
   );

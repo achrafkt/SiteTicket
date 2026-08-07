@@ -57,7 +57,7 @@ export function ViewsSidebar() {
   }
 
   return (
-    <aside className="flex h-full w-64 shrink-0 flex-col ">
+    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-slate-200 bg-slate-100 p-4">
       <div className="flex flex-col rounded-[20px] bg-[#f4f6f9] px-3 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/70">
         <button
           type="button"
@@ -105,7 +105,6 @@ export function ViewsSidebar() {
           </button>
         </div>
       </div>
-      
     </aside>
   );
 }
