@@ -22,7 +22,7 @@ export default function HelpdeskPage() {
   );
 
   return (
-    <div className="helpdesk-shell flex flex-col   bg-slate-100 font-sans">
+    <div className="helpdesk-shell flex flex-col  bg-slate-200 font-sans">
       <AppHeader />
 
       <div className="flex flex-1 overflow-hidden">
