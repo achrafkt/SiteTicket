@@ -17,6 +17,7 @@ export class PrismaSeedService implements OnApplicationBootstrap {
     await this.seedTicketTypes();
     await this.seedTicketStatuses();
     await this.seedAdminUser();
+    await this.seedDemoTicket();
   }
 
   private async seedRoles() {
@@ -67,37 +68,37 @@ export class PrismaSeedService implements OnApplicationBootstrap {
     const ticketTypes = [
       {
         code: TicketTypeCode.RFI,
-        name: 'Request for Information',
+        name: "Demande d'information",
         requires_approval_chain: false,
       },
       {
         code: TicketTypeCode.PUNCH,
-        name: 'Punch List',
+        name: 'Réserve',
         requires_approval_chain: false,
       },
       {
         code: TicketTypeCode.CHANGE_ORDER,
-        name: 'Change Order',
+        name: 'Ordre de modification',
         requires_approval_chain: true,
       },
       {
         code: TicketTypeCode.SAFETY,
-        name: 'Safety Incident',
+        name: 'Incident sécurité',
         requires_approval_chain: true,
       },
       {
         code: TicketTypeCode.MAINTENANCE,
-        name: 'Maintenance Request',
+        name: 'Demande de maintenance',
         requires_approval_chain: false,
       },
       {
         code: TicketTypeCode.SUBMITTAL,
-        name: 'Technical Submittal',
+        name: 'Soumission technique',
         requires_approval_chain: true,
       },
       {
         code: TicketTypeCode.FIELD_ISSUE,
-        name: 'Field Issue',
+        name: 'Problème de chantier',
         requires_approval_chain: false,
       },
     ];
@@ -116,40 +117,40 @@ export class PrismaSeedService implements OnApplicationBootstrap {
 
   private async seedTicketStatuses() {
     const statuses = [
-      { code: TicketStatusCode.NEW, name: 'New', sort_order: 1, is_terminal: false },
+      { code: TicketStatusCode.NEW, name: 'Nouveau', sort_order: 1, is_terminal: false },
       {
         code: TicketStatusCode.ASSIGNED,
-        name: 'Assigned',
+        name: 'Assigné',
         sort_order: 2,
         is_terminal: false,
       },
       {
         code: TicketStatusCode.IN_PROGRESS,
-        name: 'In Progress',
+        name: 'En cours',
         sort_order: 3,
         is_terminal: false,
       },
       {
         code: TicketStatusCode.PENDING,
-        name: 'Pending',
+        name: 'En attente',
         sort_order: 4,
         is_terminal: false,
       },
       {
         code: TicketStatusCode.RESOLVED,
-        name: 'Resolved',
+        name: 'Résolu',
         sort_order: 5,
         is_terminal: false,
       },
       {
         code: TicketStatusCode.CLOSED,
-        name: 'Closed',
+        name: 'Clôturé',
         sort_order: 6,
         is_terminal: true,
       },
       {
         code: TicketStatusCode.REOPENED,
-        name: 'Reopened',
+        name: 'Réouvert',
         sort_order: 7,
         is_terminal: false,
       },
@@ -210,6 +211,78 @@ export class PrismaSeedService implements OnApplicationBootstrap {
         code: 'DEMO-001',
         client_name: 'Internal Demo Client',
         status: ProjectStatus.actif,
+      },
+    });
+  }
+
+  private async seedDemoTicket() {
+    const ticketNumber = 'TKT-DEMO-0001';
+
+    const existing = await this.prisma.ticket.findUnique({
+      where: { ticket_number: ticketNumber },
+      select: { id: true },
+    });
+
+    if (existing) {
+      return;
+    }
+
+    const project = await this.prisma.project.findUnique({
+      where: { code: 'DEMO-001' },
+      select: { id: true },
+    });
+
+    const ticketType = await this.prisma.ticketType.findUnique({
+      where: { code: TicketTypeCode.PUNCH },
+      select: { id: true },
+    });
+
+    const status = await this.prisma.ticketStatus.findUnique({
+      where: { code: TicketStatusCode.NEW },
+      select: { id: true },
+    });
+
+    const adminUser = await this.prisma.user.findUnique({
+      where: { email: process.env.ADMIN_EMAIL ?? 'admin@site-ticket.local' },
+      select: { id: true },
+    });
+
+    if (!project || !ticketType || !status || !adminUser) {
+      return;
+    }
+
+    const ticket = await this.prisma.ticket.create({
+      data: {
+        ticket_number: ticketNumber,
+        project_id: project.id,
+        ticket_type_id: ticketType.id,
+        status_id: status.id,
+        title: 'Fissure visible sur voile béton R+2 — zone escalier B',
+        description:
+          "Une fissure d'environ 40 cm a été constatée sur le voile béton du R+2, à proximité de la cage d'escalier B. Nécessite une expertise avant fermeture du lot.",
+        priority: 'high',
+        location_zone: 'LOT-216',
+        trade: 'Gros œuvre',
+        created_by: adminUser.id,
+      },
+    });
+
+    await this.prisma.ticketStatusHistory.create({
+      data: {
+        ticket_id: ticket.id,
+        to_status_id: status.id,
+        changed_by: adminUser.id,
+        comment: 'Ticket créé',
+      },
+    });
+
+    await this.prisma.ticketComment.create({
+      data: {
+        ticket_id: ticket.id,
+        user_id: adminUser.id,
+        comment_text:
+          'Bonjour, merci de valider si cette fissure est structurelle ou superficielle avant la coulée du R+3.',
+        is_internal: false,
       },
     });
   }

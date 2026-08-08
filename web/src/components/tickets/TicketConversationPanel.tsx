@@ -12,15 +12,14 @@ import {
   Link as LinkIcon,
   Image as ImageIcon,
   Paperclip,
-  FileText,
   Send,
   ChevronDown,
   ChevronRight,
   Lock,
   BookTemplate,
   Braces,
+  RefreshCw,
 } from 'lucide-react';
-import { CURRENT_USER } from '@/data/mock-tickets';
 import { useTicketStore } from '@/store/ticket-store';
 import { useTicketCollaboration } from '@/hooks/useTicketCollaboration';
 import { Avatar } from './Avatar';
@@ -54,25 +53,6 @@ const MACRO_VARIABLES = [
   { id: 'var-4', label: 'Numéro de ticket', token: '{{numero_ticket}}' },
 ];
 
-function AttachmentThumb({ attachment }: { attachment: TicketMessage['attachments'][number] }) {
-  return (
-    <button
-      type="button"
-      className="flex items-center gap-2 rounded-md border border-gray-200 px-2.5 py-1.5 text-left hover:bg-gray-50"
-    >
-      {attachment.fileType === 'image' ? (
-        <ImageIcon size={16} className="text-blue-500" />
-      ) : (
-        <FileText size={16} className="text-red-500" />
-      )}
-      <span className="min-w-0">
-        <span className="block truncate text-xs font-medium text-gray-700">{attachment.fileName}</span>
-        <span className="block text-[11px] text-gray-400">{formatDateTime(attachment.uploadedAt)}</span>
-      </span>
-    </button>
-  );
-}
-
 function MessageItem({ message }: { message: TicketMessage }) {
   const [collapsed, setCollapsed] = useState(false);
   const isLong = message.body.length > 220;
@@ -80,7 +60,7 @@ function MessageItem({ message }: { message: TicketMessage }) {
   return (
     <div
       className={`rounded-lg border p-3 ${
-        message.visibility === 'private' ? 'border-amber-200 bg-amber-50' : 'border-gray-100 bg-white'
+        message.isInternal ? 'border-amber-200 bg-amber-50' : 'border-gray-100 bg-white'
       }`}
     >
       <div className="flex items-start justify-between">
@@ -88,7 +68,6 @@ function MessageItem({ message }: { message: TicketMessage }) {
           <Avatar initials={message.authorInitials} size="md" />
           <div>
             <p className="text-sm font-medium text-gray-900">{message.authorName}</p>
-            <p className="text-xs text-gray-400">À : {message.recipient}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -105,7 +84,7 @@ function MessageItem({ message }: { message: TicketMessage }) {
         </div>
       </div>
 
-      {message.visibility === 'private' ? (
+      {message.isInternal ? (
         <span className="mt-2 inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-700">
           <Lock size={10} /> Commentaire privé
         </span>
@@ -114,27 +93,20 @@ function MessageItem({ message }: { message: TicketMessage }) {
       {!collapsed ? (
         <p className="mt-2 whitespace-pre-wrap text-sm text-gray-700">{message.body}</p>
       ) : null}
-
-      {message.attachments.length > 0 && !collapsed ? (
-        <div className="mt-2.5 flex flex-wrap gap-2">
-          {message.attachments.map((attachment) => (
-            <AttachmentThumb key={attachment.id} attachment={attachment} />
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }
 
 export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
-  const addMessage = useTicketStore((state) => state.addMessage);
+  const currentUser = useTicketStore((state) => state.currentUser);
+  const addComment = useTicketStore((state) => state.addComment);
+  const isSubmittingComment = useTicketStore((state) => state.isSubmittingComment);
+  const commentError = useTicketStore((state) => state.commentError);
   const toggleKnowledgePanel = useTicketStore((state) => state.toggleKnowledgePanel);
   const toggleDetailsPanel = useTicketStore((state) => state.toggleDetailsPanel);
   const isDetailsPanelOpen = useTicketStore((state) => state.isDetailsPanelOpen);
 
   const [tab, setTab] = useState<ReplyTab>('public');
-  const [recipient, setRecipient] = useState(ticket.reporter.name);
-  const [cc, setCc] = useState('');
   const [body, setBody] = useState('');
   const [addToKnowledge, setAddToKnowledge] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
@@ -143,14 +115,8 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
 
   const { activeEditor, announceEditing, takeControl, simulateRemoteEditor } = useTicketCollaboration(
     ticket.id,
-    { id: CURRENT_USER.id, name: CURRENT_USER.name },
+    { id: currentUser?.id ?? '', name: currentUser?.name ?? '' },
   );
-
-  useEffect(() => {
-    setBody('');
-    setTab('public');
-    setRecipient(ticket.reporter.name);
-  }, [ticket.id]);
 
   useEffect(() => {
     if (!body.trim()) return;
@@ -161,8 +127,8 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
   }, [body]);
 
   const isBlockedByOtherEditor = useMemo(
-    () => activeEditor !== null && activeEditor.userId !== CURRENT_USER.id,
-    [activeEditor],
+    () => activeEditor !== null && activeEditor.userId !== currentUser?.id,
+    [activeEditor, currentUser?.id],
   );
 
   useEffect(() => {
@@ -186,25 +152,18 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
     setOpenMenu(null);
   }
 
-  function handleSend() {
-    if (!body.trim()) return;
+  async function handleSend() {
+    if (!body.trim() || isSubmittingComment) return;
 
-    addMessage(ticket.id, {
-      id: `m-${Date.now()}`,
-      authorName: CURRENT_USER.name,
-      authorInitials: CURRENT_USER.initials,
-      recipient: tab === 'public' ? recipient : 'Équipe interne',
-      visibility: tab,
-      body,
-      createdAt: new Date().toISOString(),
-      attachments: [],
-    });
+    await addComment(ticket.id, body, tab === 'private');
 
-    setBody('');
-    setDraftSavedAt(null);
+    if (!useTicketStore.getState().commentError) {
+      setBody('');
+      setDraftSavedAt(null);
 
-    if (addToKnowledge) {
-      toggleKnowledgePanel(true);
+      if (addToKnowledge) {
+        toggleKnowledgePanel(true);
+      }
     }
   }
 
@@ -297,28 +256,6 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
         </div>
 
         <div className={`rounded-lg border ${tab === 'private' ? 'border-amber-200 bg-amber-50' : 'border-gray-200 bg-white'}`}>
-          {tab === 'public' ? (
-            <div className="flex flex-col gap-1.5 border-b border-gray-100 px-3 py-2 text-xs">
-              <label className="flex items-center gap-2">
-                <span className="w-8 text-gray-400">À :</span>
-                <input
-                  value={recipient}
-                  onChange={(event) => setRecipient(event.target.value)}
-                  className="flex-1 rounded bg-gray-50 px-2 py-1 focus:outline-none"
-                />
-              </label>
-              <label className="flex items-center gap-2">
-                <span className="w-8 text-gray-400">Cc :</span>
-                <input
-                  value={cc}
-                  onChange={(event) => setCc(event.target.value)}
-                  placeholder="Optionnel"
-                  className="flex-1 rounded bg-gray-50 px-2 py-1 focus:outline-none"
-                />
-              </label>
-            </div>
-          ) : null}
-
           <div className="flex items-center gap-1 border-b border-gray-100 px-2 py-1.5 text-gray-400" ref={toolbarRef}>
             <button type="button" className="rounded p-1 hover:bg-gray-100" title="Gras">
               <Bold size={14} />
@@ -418,13 +355,21 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
             <button
               type="button"
               onClick={handleSend}
-              disabled={!body.trim() || isBlockedByOtherEditor}
+              disabled={!body.trim() || isBlockedByOtherEditor || isSubmittingComment}
               className="flex h-8 w-8 items-center justify-center rounded-md bg-blue-600 text-white disabled:bg-gray-200 disabled:text-gray-400"
               title="Envoyer"
             >
-              <Send size={15} />
+              {isSubmittingComment ? (
+                <RefreshCw size={15} className="animate-spin" />
+              ) : (
+                <Send size={15} />
+              )}
             </button>
           </div>
+
+          {commentError ? (
+            <p className="border-t border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600">{commentError}</p>
+          ) : null}
         </div>
       </div>
     </section>

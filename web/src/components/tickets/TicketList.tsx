@@ -33,6 +33,7 @@ export function TicketList() {
   const setActiveTicketId = useTicketStore((state) => state.setActiveTicketId);
   const searchTerm = useTicketStore((state) => state.searchTerm);
   const setSearchTerm = useTicketStore((state) => state.setSearchTerm);
+  const currentUserId = useTicketStore((state) => state.currentUser?.id ?? null);
 
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [sortBy, setSortBy] = useState<SortKey>('recent');
@@ -51,7 +52,7 @@ export function TicketList() {
   }, [isSortMenuOpen]);
 
   const filteredTickets = useMemo(() => {
-    const byView = filterTicketsByView(tickets, activeView);
+    const byView = filterTicketsByView(tickets, activeView, currentUserId);
     const bySearch = !searchTerm.trim()
       ? byView
       : byView.filter((ticket) => {
@@ -59,7 +60,7 @@ export function TicketList() {
           return (
             ticket.title.toLowerCase().includes(term) ||
             ticket.reference.toLowerCase().includes(term) ||
-            ticket.lot.toLowerCase().includes(term)
+            (ticket.lot ?? '').toLowerCase().includes(term)
           );
         });
 
@@ -76,7 +77,7 @@ export function TicketList() {
       sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }
     return sorted;
-  }, [tickets, activeView, searchTerm, sortBy]);
+  }, [tickets, activeView, searchTerm, sortBy, currentUserId]);
 
   function toggleCheck(id: string) {
     setCheckedIds((current) => {

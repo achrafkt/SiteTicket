@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { CreateCommentDto } from './dto/create-comment.dto';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 
@@ -51,6 +52,9 @@ const ticketSelect = {
       first_name: true,
       last_name: true,
       email: true,
+      role: {
+        select: { code: true, name: true },
+      },
     },
   },
   assigned_to_user: {
@@ -59,6 +63,9 @@ const ticketSelect = {
       first_name: true,
       last_name: true,
       email: true,
+      role: {
+        select: { code: true, name: true },
+      },
     },
   },
 } as const;
@@ -239,6 +246,33 @@ export class TicketsService {
     await this.ensureTicketExists(id);
     await this.prisma.ticket.delete({ where: { id } });
     return { success: true };
+  }
+
+  async addComment(ticketId: string, createCommentDto: CreateCommentDto, userId: string) {
+    await this.ensureTicketExists(ticketId);
+
+    return this.prisma.ticketComment.create({
+      data: {
+        ticket_id: ticketId,
+        user_id: userId,
+        comment_text: createCommentDto.commentText,
+        is_internal: createCommentDto.isInternal ?? true,
+      },
+      select: {
+        id: true,
+        comment_text: true,
+        is_internal: true,
+        created_at: true,
+        user: {
+          select: {
+            id: true,
+            first_name: true,
+            last_name: true,
+            email: true,
+          },
+        },
+      },
+    });
   }
 
   private async generateTicketNumber() {

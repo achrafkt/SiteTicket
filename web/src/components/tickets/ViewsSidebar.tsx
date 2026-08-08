@@ -22,9 +22,10 @@ export function ViewsSidebar() {
   const tickets = useTicketStore((state) => state.tickets);
   const activeView = useTicketStore((state) => state.activeView);
   const setActiveView = useTicketStore((state) => state.setActiveView);
+  const currentUserId = useTicketStore((state) => state.currentUser?.id ?? null);
 
   function countFor(view: ViewKey) {
-    return filterTicketsByView(tickets, view).length;
+    return filterTicketsByView(tickets, view, currentUserId).length;
   }
 
   function renderItem(item: ViewItem) {

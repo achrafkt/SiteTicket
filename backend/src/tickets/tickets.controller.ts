@@ -10,6 +10,7 @@ import {
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
+import { CreateCommentDto } from './dto/create-comment.dto';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 import { TicketsService } from './tickets.service';
@@ -53,5 +54,18 @@ export class TicketsController {
   @Delete(':id')
   remove(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.ticketsService.remove(id);
+  }
+
+  @Post(':id/comments')
+  addComment(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() createCommentDto: CreateCommentDto,
+    @Req() req: Request,
+  ) {
+    const userId = (req as Request & { user?: { sub: string } }).user?.sub;
+    if (!userId) {
+      throw new Error('Authenticated user required');
+    }
+    return this.ticketsService.addComment(id, createCommentDto, userId);
   }
 }

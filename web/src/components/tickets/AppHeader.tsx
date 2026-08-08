@@ -10,37 +10,42 @@ import {
   RefreshCw,
   ShieldAlert,
   Wrench,
+  FileCheck,
+  Hammer,
 } from "lucide-react";
-import { CURRENT_USER } from "@/data/mock-tickets";
-import { TICKET_TYPE_LABELS, type TicketTypeCode } from "@/types/ticket";
+import { useTicketStore } from "@/store/ticket-store";
+import { clearStoredUser } from "@/lib/current-user";
+import type { TicketTypeCode } from "@/types/ticket";
 import { initialsAvatarColor } from "./ticket-visuals";
 
-const CREATE_OPTIONS: TicketTypeCode[] = [
-  "rfi",
-  "reserve",
-  "change_order",
-  "qse_nonconformity",
-  "intervention_request",
-];
-
 const CREATE_OPTION_ICONS: Record<TicketTypeCode, React.ElementType> = {
-  rfi: FileQuestion,
-  reserve: ClipboardList,
-  change_order: RefreshCw,
-  qse_nonconformity: ShieldAlert,
-  intervention_request: Wrench,
+  RFI: FileQuestion,
+  PUNCH: ClipboardList,
+  CHANGE_ORDER: RefreshCw,
+  SAFETY: ShieldAlert,
+  MAINTENANCE: Wrench,
+  SUBMITTAL: FileCheck,
+  FIELD_ISSUE: Hammer,
 };
 
 export function AppHeader() {
   const router = useRouter();
+  const currentUser = useTicketStore((state) => state.currentUser);
+  const types = useTicketStore((state) => state.types);
   const [isCreateMenuOpen, setCreateMenuOpen] = useState(false);
   const [isUserMenuOpen, setUserMenuOpen] = useState(false);
   const [globalSearch, setGlobalSearch] = useState("");
+  const [mounted, setMounted] = useState(false);
   const createRef = useRef<HTMLDivElement>(null);
   const userRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   function handleLogout() {
     localStorage.removeItem("site-ticket-token");
+    clearStoredUser();
     setUserMenuOpen(false);
     router.push("/login");
   }
@@ -60,6 +65,8 @@ export function AppHeader() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  const displayUser = mounted ? currentUser : null;
 
   return (
     <header className="relative z-30 flex h-16 shrink-0 items-center gap-3  bg-nav-bg pr-4 text-white shadow-[0_10px_28px_rgba(8,26,77,0.32)]">
@@ -114,17 +121,17 @@ export function AppHeader() {
               </p>
               <div className="border-t border-gray-100" />
               <div className="pt-1">
-                {CREATE_OPTIONS.map((code) => {
-                  const Icon = CREATE_OPTION_ICONS[code];
+                {types.map((type) => {
+                  const Icon = CREATE_OPTION_ICONS[type.code] ?? FileQuestion;
                   return (
                     <button
-                      key={code}
+                      key={type.id}
                       type="button"
                       onClick={() => setCreateMenuOpen(false)}
                       className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-blue-50 hover:text-blue-700"
                     >
                       <Icon size={16} className="shrink-0 text-gray-400" />
-                      {TICKET_TYPE_LABELS[code]}
+                      {type.name}
                     </button>
                   );
                 })}
@@ -154,17 +161,17 @@ export function AppHeader() {
           <button
             type="button"
             onClick={() => setUserMenuOpen((value) => !value)}
-            title={CURRENT_USER.name}
+            title={displayUser?.name ?? undefined}
             className={`flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold text-white shadow-[0_6px_14px_rgba(2,6,23,0.35)] ${initialsAvatarColor(
-              CURRENT_USER.initials,
+              displayUser?.initials ?? '?',
             )}`}
           >
-            {CURRENT_USER.initials}
+            {displayUser?.initials ?? '?'}
           </button>
           {isUserMenuOpen ? (
             <div className="absolute right-0 top-full z-20 mt-2 w-52 rounded-xl border border-slate-200 bg-white py-1.5 text-gray-700 shadow-[0_18px_36px_rgba(15,23,42,0.16)]">
               <p className="border-b border-gray-100 px-3.5 py-2.5 text-xs text-gray-400">
-                {CURRENT_USER.name} · {CURRENT_USER.role}
+                {displayUser?.name} · {displayUser?.roleName}
               </p>
               <button
                 type="button"

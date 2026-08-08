@@ -9,34 +9,41 @@ export const DUE_DATE_TEXT_CLASSES: Record<DueDateUrgency, string> = {
 };
 
 export const STATUS_BADGE_CLASSES: Record<TicketStatusCode, string> = {
-  todo: 'bg-status-todo-bg text-status-todo',
-  in_progress: 'bg-status-in-progress-bg text-status-in-progress',
-  done: 'bg-status-done-bg text-status-done',
-  blocked: 'bg-status-blocked-bg text-status-blocked',
-  waiting: 'bg-status-waiting-bg text-status-waiting',
+  NEW: 'bg-status-todo-bg text-status-todo',
+  ASSIGNED: 'bg-status-todo-bg text-status-todo',
+  IN_PROGRESS: 'bg-status-in-progress-bg text-status-in-progress',
+  PENDING: 'bg-status-waiting-bg text-status-waiting',
+  RESOLVED: 'bg-status-done-bg text-status-done',
+  CLOSED: 'bg-status-done-bg text-status-done',
+  REOPENED: 'bg-status-blocked-bg text-status-blocked',
 };
 
 export const STATUS_DOT_CLASSES: Record<TicketStatusCode, string> = {
-  todo: 'bg-status-todo',
-  in_progress: 'bg-status-in-progress',
-  done: 'bg-status-done',
-  blocked: 'bg-status-blocked',
-  waiting: 'bg-status-waiting',
+  NEW: 'bg-status-todo',
+  ASSIGNED: 'bg-status-todo',
+  IN_PROGRESS: 'bg-status-in-progress',
+  PENDING: 'bg-status-waiting',
+  RESOLVED: 'bg-status-done',
+  CLOSED: 'bg-status-done',
+  REOPENED: 'bg-status-blocked',
 };
 
 export const PRIORITY_DOT_CLASSES: Record<TicketPriority, string> = {
   low: 'bg-priority-low',
   medium: 'bg-priority-medium',
   high: 'bg-priority-high',
-  urgent: 'bg-priority-urgent',
+  critical: 'bg-priority-urgent',
 };
 
 export const REPORTER_ROLE_BADGE_CLASSES: Record<string, string> = {
-  MOA: 'bg-purple-100 text-purple-700',
-  MOE: 'bg-indigo-100 text-indigo-700',
-  Conducteur: 'bg-blue-100 text-blue-700',
-  'Sous-traitant': 'bg-amber-100 text-amber-700',
-  'Chef de chantier': 'bg-teal-100 text-teal-700',
+  moa: 'bg-purple-100 text-purple-700',
+  moe: 'bg-indigo-100 text-indigo-700',
+  conducteur_travaux: 'bg-blue-100 text-blue-700',
+  sous_traitant: 'bg-amber-100 text-amber-700',
+  chef_chantier: 'bg-teal-100 text-teal-700',
+  qse: 'bg-rose-100 text-rose-700',
+  observateur: 'bg-slate-100 text-slate-600',
+  admin: 'bg-slate-100 text-slate-600',
 };
 
 export function formatShortDate(isoDate: string | null): string {

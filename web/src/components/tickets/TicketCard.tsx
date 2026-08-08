@@ -5,7 +5,6 @@ import type { Ticket } from '@/types/ticket';
 import { isTicketOverdue } from '@/lib/ticket-rules';
 import { AvatarStack } from './Avatar';
 import { PRIORITY_DOT_CLASSES, STATUS_BADGE_CLASSES, formatShortDate } from './ticket-visuals';
-import { TICKET_STATUS_LABELS } from '@/types/ticket';
 
 type TicketCardProps = {
   ticket: Ticket;
@@ -49,15 +48,17 @@ export function TicketCard({ ticket, isSelected, isChecked, onSelect, onToggleCh
         </div>
 
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold tracking-wide text-slate-500">
-            {ticket.lot}
-          </span>
+          {ticket.lot ? (
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold tracking-wide text-slate-500">
+              {ticket.lot}
+            </span>
+          ) : null}
           <span
             className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_BADGE_CLASSES[ticket.status]}`}
           >
-            {TICKET_STATUS_LABELS[ticket.status]}
+            {ticket.statusName}
           </span>
-          {isTicketOverdue(ticket.dueDate, ticket.status) ? (
+          {isTicketOverdue(ticket.dueDate, ticket.statusIsTerminal) ? (
             <span className="flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-600">
               <Clock size={11} /> En retard
             </span>

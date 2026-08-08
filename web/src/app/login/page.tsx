@@ -5,6 +5,7 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Mail, Lock, Eye } from "lucide-react";
+import { storeUser } from "@/lib/current-user";
 import styles from "./login.module.css";
 
 type LoginResponse = {
@@ -58,6 +59,7 @@ export default function LoginPage() {
 
       const loginResponse = payload as LoginResponse;
       localStorage.setItem("site-ticket-token", loginResponse.accessToken);
+      storeUser(loginResponse.user);
       router.push("/helpdesk");
     } catch (submitError) {
       setError(

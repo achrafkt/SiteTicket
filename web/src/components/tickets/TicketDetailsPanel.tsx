@@ -1,11 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Plus, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Plus, RefreshCw, X } from 'lucide-react';
 import { useTicketStore } from '@/store/ticket-store';
 import { getDueDateUrgency } from '@/lib/ticket-rules';
-import { CURRENT_USER } from '@/data/mock-tickets';
 import { Avatar } from './Avatar';
+import { Dropdown } from './Dropdown';
 import {
   DUE_DATE_TEXT_CLASSES,
   PRIORITY_DOT_CLASSES,
@@ -13,14 +13,7 @@ import {
   STATUS_DOT_CLASSES,
   formatShortDate,
 } from './ticket-visuals';
-import {
-  TICKET_PRIORITY_LABELS,
-  TICKET_STATUS_LABELS,
-  TICKET_TYPE_LABELS,
-  type Ticket,
-  type TicketPriority,
-  type TicketStatusCode,
-} from '@/types/ticket';
+import { TICKET_PRIORITY_LABELS, type Ticket, type TicketPriority } from '@/types/ticket';
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">{children}</p>;
@@ -58,15 +51,20 @@ function CollapsibleSection({
 }
 
 export function TicketDetailsPanel({ ticket }: { ticket: Ticket }) {
+  const statuses = useTicketStore((state) => state.statuses);
+  const currentUser = useTicketStore((state) => state.currentUser);
   const updateTicketStatus = useTicketStore((state) => state.updateTicketStatus);
   const updateTicketPriority = useTicketStore((state) => state.updateTicketPriority);
   const assignTicketToCurrentUser = useTicketStore((state) => state.assignTicketToCurrentUser);
   const toggleDetailsPanel = useTicketStore((state) => state.toggleDetailsPanel);
+  const detailLoadingId = useTicketStore((state) => state.detailLoadingId);
+  const detailError = useTicketStore((state) => state.detailError);
   const [tagDraft, setTagDraft] = useState('');
   const [isAddingTag, setIsAddingTag] = useState(false);
   const [tags, setTags] = useState(ticket.tags);
 
-  const isAssignedToMe = ticket.assignees.some((assignee) => assignee.name === CURRENT_USER.name);
+  const isDetailLoading = detailLoadingId === ticket.id;
+  const isAssignedToMe = ticket.assignees.some((assignee) => assignee.id === currentUser?.id);
 
   function addTag() {
     const value = tagDraft.trim();
@@ -84,49 +82,38 @@ export function TicketDetailsPanel({ ticket }: { ticket: Ticket }) {
 
   return (
     <aside className="helpdesk-scroll flex h-full w-[320px] shrink-0 flex-col overflow-y-auto border-l border-gray-100 bg-white">
-     <div className="flex items-center gap-2 border-b border-gray-100 p-4">
-  <div className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-gray-200 bg-white pl-3 pr-2 focus-within:ring-1 focus-within:ring-blue-500">
-    <span className={`h-2 w-2 shrink-0 rounded-full ${STATUS_DOT_CLASSES[ticket.status]}`} />
-    <select
-      value={ticket.status}
-      onChange={(event) => updateTicketStatus(ticket.id, event.target.value as TicketStatusCode)}
-      className="w-full min-w-0 truncate appearance-none bg-transparent py-1.5 text-sm font-medium text-gray-700 focus:outline-none"
-    >
-      {(Object.keys(TICKET_STATUS_LABELS) as TicketStatusCode[]).map((code) => (
-        <option key={code} value={code}>
-          {TICKET_STATUS_LABELS[code]}
-        </option>
-      ))}
-    </select>
-    <ChevronDown size={14} className="shrink-0 text-gray-400" />
-  </div>
-  <button
-    type="button"
-    onClick={() => toggleDetailsPanel(false)}
-    className="shrink-0 rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-  >
-    <X size={16} />
-  </button>
-</div>
+      <div className="flex items-center gap-2 border-b border-gray-100 p-4">
+        <Dropdown
+          className="min-w-0 flex-1"
+          value={ticket.statusId}
+          onChange={(newStatusId) => updateTicketStatus(ticket.id, newStatusId)}
+          options={statuses.map((status) => ({
+            value: status.id,
+            label: status.name,
+            dotClassName: STATUS_DOT_CLASSES[status.code as keyof typeof STATUS_DOT_CLASSES],
+          }))}
+        />
+        <button
+          type="button"
+          onClick={() => toggleDetailsPanel(false)}
+          className="shrink-0 rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+        >
+          <X size={16} />
+        </button>
+      </div>
 
       <div className="space-y-6 p-4">
         <div>
-           <FieldLabel>Priorité</FieldLabel>
-  <div className="flex items-center gap-2 rounded-md border border-gray-200 bg-white pl-3 pr-2 focus-within:ring-1 focus-within:ring-blue-500">
-    <span className={`h-2 w-2 shrink-0 rounded-full ${PRIORITY_DOT_CLASSES[ticket.priority]}`} />
-    <select
-      value={ticket.priority}
-      onChange={(event) => updateTicketPriority(ticket.id, event.target.value as TicketPriority)}
-      className="w-full appearance-none bg-transparent py-1.5 text-sm font-medium text-gray-700 focus:outline-none"
-    >
-      {(Object.keys(TICKET_PRIORITY_LABELS) as TicketPriority[]).map((code) => (
-        <option key={code} value={code}>
-          {TICKET_PRIORITY_LABELS[code]}
-        </option>
-      ))}
-    </select>
-    <ChevronDown size={14} className="shrink-0 text-gray-400" />
-  </div>
+          <FieldLabel>Priorité</FieldLabel>
+          <Dropdown
+            value={ticket.priority}
+            onChange={(newPriority) => updateTicketPriority(ticket.id, newPriority as TicketPriority)}
+            options={(Object.keys(TICKET_PRIORITY_LABELS) as TicketPriority[]).map((code) => ({
+              value: code,
+              label: TICKET_PRIORITY_LABELS[code],
+              dotClassName: PRIORITY_DOT_CLASSES[code],
+            }))}
+          />
         </div>
 
         <div>
@@ -162,17 +149,21 @@ export function TicketDetailsPanel({ ticket }: { ticket: Ticket }) {
 
         <div>
           <FieldLabel>Chantier / Projet</FieldLabel>
-          <p className="text-sm text-gray-700">{ticket.project}</p>
+          <p className="text-sm text-gray-700">{ticket.project.name}</p>
         </div>
 
         <div>
           <FieldLabel>Type de ticket</FieldLabel>
-          <p className="text-sm text-gray-700">{TICKET_TYPE_LABELS[ticket.type]}</p>
+          <p className="text-sm text-gray-700">{ticket.typeName}</p>
         </div>
 
         <div>
           <FieldLabel>Date d&apos;échéance</FieldLabel>
-          <p className={`text-sm ${DUE_DATE_TEXT_CLASSES[getDueDateUrgency(ticket.dueDate, ticket.status)]}`}>
+          <p
+            className={`text-sm ${
+              DUE_DATE_TEXT_CLASSES[getDueDateUrgency(ticket.dueDate, ticket.statusIsTerminal)]
+            }`}
+          >
             {formatShortDate(ticket.dueDate)}
           </p>
         </div>
@@ -180,15 +171,17 @@ export function TicketDetailsPanel({ ticket }: { ticket: Ticket }) {
         <div>
           <FieldLabel>Rapporteur</FieldLabel>
           <div className="flex items-center gap-2">
-            <Avatar initials={ticket.reporter.name.split(' ').map((part) => part[0]).join('')} />
+            <Avatar initials={ticket.reporter.initials} />
             <span className="text-sm text-gray-700">{ticket.reporter.name}</span>
-            <span
-              className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${
-                REPORTER_ROLE_BADGE_CLASSES[ticket.reporter.role] ?? 'bg-gray-100 text-gray-600'
-              }`}
-            >
-              {ticket.reporter.role}
-            </span>
+            {ticket.reporter.roleName ? (
+              <span
+                className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${
+                  REPORTER_ROLE_BADGE_CLASSES[ticket.reporter.roleCode ?? ''] ?? 'bg-gray-100 text-gray-600'
+                }`}
+              >
+                {ticket.reporter.roleName}
+              </span>
+            ) : null}
           </div>
         </div>
 
@@ -282,17 +275,27 @@ export function TicketDetailsPanel({ ticket }: { ticket: Ticket }) {
         </CollapsibleSection>
 
         <CollapsibleSection title="Historique" count={ticket.statusHistory.length}>
-          <ul className="space-y-2">
-            {ticket.statusHistory.map((entry) => (
-              <li key={entry.id} className="flex items-start gap-2 text-xs text-gray-500">
-                <span className={`mt-1 h-1.5 w-1.5 rounded-full ${STATUS_DOT_CLASSES[entry.toStatus]}`} />
-                <span>
-                  <strong className="text-gray-700">{entry.changedBy}</strong> →{' '}
-                  {TICKET_STATUS_LABELS[entry.toStatus]} ({formatShortDate(entry.changedAt)})
-                </span>
-              </li>
-            ))}
-          </ul>
+          {isDetailLoading ? (
+            <p className="flex items-center gap-1.5 text-xs text-gray-400">
+              <RefreshCw size={12} className="animate-spin" /> Chargement de l&apos;historique...
+            </p>
+          ) : detailError ? (
+            <p className="text-xs text-red-600">{detailError}</p>
+          ) : ticket.statusHistory.length === 0 ? (
+            <p className="text-xs text-gray-400">Aucun historique.</p>
+          ) : (
+            <ul className="space-y-2">
+              {ticket.statusHistory.map((entry) => (
+                <li key={entry.id} className="flex items-start gap-2 text-xs text-gray-500">
+                  <span className={`mt-1 h-1.5 w-1.5 rounded-full ${STATUS_DOT_CLASSES[entry.toStatusCode]}`} />
+                  <span>
+                    <strong className="text-gray-700">{entry.changedBy}</strong> → {entry.toStatusName} (
+                    {formatShortDate(entry.changedAt)})
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </CollapsibleSection>
       </div>
     </aside>
