@@ -32,6 +32,7 @@ export function AppHeader() {
   const router = useRouter();
   const currentUser = useTicketStore((state) => state.currentUser);
   const types = useTicketStore((state) => state.types);
+  const openCreateTicketPanel = useTicketStore((state) => state.openCreateTicketPanel);
   const [isCreateMenuOpen, setCreateMenuOpen] = useState(false);
   const [isUserMenuOpen, setUserMenuOpen] = useState(false);
   const [globalSearch, setGlobalSearch] = useState("");
@@ -127,7 +128,10 @@ export function AppHeader() {
                     <button
                       key={type.id}
                       type="button"
-                      onClick={() => setCreateMenuOpen(false)}
+                      onClick={() => {
+                        setCreateMenuOpen(false);
+                        openCreateTicketPanel(type.id);
+                      }}
                       className="flex w-full items-center gap-2.5 px-3.5 py-2 text-left text-sm text-gray-700 transition-colors hover:bg-blue-50 hover:text-blue-700"
                     >
                       <Icon size={16} className="shrink-0 text-gray-400" />

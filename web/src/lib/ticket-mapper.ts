@@ -1,5 +1,6 @@
 import type {
   ApiComment,
+  ApiProject,
   ApiStatusHistoryEntry,
   ApiTicket,
   ApiTicketStatus,
@@ -8,6 +9,7 @@ import type {
 } from './tickets-api';
 import type {
   Person,
+  Project,
   Ticket,
   TicketMessage,
   TicketPriority,
@@ -59,6 +61,14 @@ export function mapStatus(status: ApiTicketStatus): TicketStatus {
     name: status.name,
     sortOrder: status.sort_order,
     isTerminal: status.is_terminal,
+  };
+}
+
+export function mapProject(project: ApiProject): Project {
+  return {
+    id: project.id,
+    name: project.name,
+    code: project.code,
   };
 }
 

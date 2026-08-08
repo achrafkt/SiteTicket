@@ -65,6 +65,12 @@ export type ApiTicket = {
   status_history?: ApiStatusHistoryEntry[];
 };
 
+export type ApiProject = {
+  id: string;
+  name: string;
+  code: string;
+};
+
 export type UpdateTicketPayload = Partial<{
   title: string;
   description: string;
@@ -78,8 +84,31 @@ export type UpdateTicketPayload = Partial<{
   statusId: string;
 }>;
 
+export type CreateTicketPayload = {
+  projectId: string;
+  ticketTypeId: string;
+  title: string;
+  description?: string;
+  priority?: string;
+  locationZone?: string;
+  trade?: string;
+  dueDate?: string;
+  assignedTo?: string;
+};
+
 export function getTickets() {
   return apiFetch<ApiTicket[]>('/tickets');
+}
+
+export function createTicket(payload: CreateTicketPayload) {
+  return apiFetch<ApiTicket>('/tickets', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getProjects() {
+  return apiFetch<ApiProject[]>('/projects');
 }
 
 export function getTicket(id: string) {

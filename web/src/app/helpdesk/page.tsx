@@ -9,6 +9,7 @@ import { TicketList } from '@/components/tickets/TicketList';
 import { TicketConversationPanel } from '@/components/tickets/TicketConversationPanel';
 import { TicketDetailsPanel } from '@/components/tickets/TicketDetailsPanel';
 import { CreateKnowledgePanel } from '@/components/tickets/CreateKnowledgePanel';
+import { CreateTicketPanel } from '@/components/tickets/CreateTicketPanel';
 import { useTicketStore } from '@/store/ticket-store';
 
 export default function HelpdeskPage() {
@@ -16,6 +17,7 @@ export default function HelpdeskPage() {
   const activeTicketId = useTicketStore((state) => state.activeTicketId);
   const isKnowledgePanelOpen = useTicketStore((state) => state.isKnowledgePanelOpen);
   const isDetailsPanelOpen = useTicketStore((state) => state.isDetailsPanelOpen);
+  const isCreatePanelOpen = useTicketStore((state) => state.isCreatePanelOpen);
   const isLoading = useTicketStore((state) => state.isLoading);
   const error = useTicketStore((state) => state.error);
   const loadInitialData = useTicketStore((state) => state.loadInitialData);
@@ -61,7 +63,9 @@ export default function HelpdeskPage() {
               <>
                 <TicketList />
 
-                {activeTicket ? (
+                {isCreatePanelOpen ? (
+                  <CreateTicketPanel />
+                ) : activeTicket ? (
                   <>
                     <TicketConversationPanel key={activeTicket.id} ticket={activeTicket} />
                     {isKnowledgePanelOpen ? (

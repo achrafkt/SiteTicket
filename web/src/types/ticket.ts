@@ -42,6 +42,12 @@ export type Person = {
   roleName: string | null;
 };
 
+export type Project = {
+  id: string;
+  name: string;
+  code: string;
+};
+
 export type TicketMessage = {
   id: string;
   authorName: string;
@@ -82,7 +88,7 @@ export type Ticket = {
   typeName: string;
   lot: string | null;
   trade: string | null;
-  project: { id: string; name: string; code: string };
+  project: Project;
   assignees: Person[];
   reporter: Person;
   dueDate: string | null;

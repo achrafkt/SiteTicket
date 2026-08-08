@@ -1,17 +1,20 @@
 import { create } from 'zustand';
 import { ApiError } from '@/lib/api';
 import { getStoredUser } from '@/lib/current-user';
-import { mapComment, mapStatus, mapTicket, mapType } from '@/lib/ticket-mapper';
+import { mapComment, mapProject, mapStatus, mapTicket, mapType } from '@/lib/ticket-mapper';
 import { isTicketOverdue } from '@/lib/ticket-rules';
 import {
   createComment,
+  createTicket as createTicketRequest,
+  getProjects,
   getTicket,
   getTicketStatuses,
   getTicketTypes,
   getTickets,
   updateTicket,
+  type CreateTicketPayload,
 } from '@/lib/tickets-api';
-import type { Person, Ticket, TicketPriority, TicketStatus, TicketType } from '@/types/ticket';
+import type { Person, Project, Ticket, TicketPriority, TicketStatus, TicketType } from '@/types/ticket';
 
 export type ViewKey =
   | 'my_tickets'
@@ -27,6 +30,7 @@ type TicketStoreState = {
   tickets: Ticket[];
   statuses: TicketStatus[];
   types: TicketType[];
+  projects: Project[];
   currentUser: Person | null;
   activeView: ViewKey;
   activeTicketId: string | null;
@@ -40,6 +44,10 @@ type TicketStoreState = {
   detailLoadedIds: Set<string>;
   isSubmittingComment: boolean;
   commentError: string | null;
+  isCreatePanelOpen: boolean;
+  createDraftTypeId: string | null;
+  isCreatingTicket: boolean;
+  createTicketError: string | null;
   loadInitialData: () => Promise<void>;
   setActiveView: (view: ViewKey) => void;
   setActiveTicketId: (id: string | null) => void;
@@ -50,6 +58,9 @@ type TicketStoreState = {
   toggleKnowledgePanel: (open?: boolean) => void;
   toggleDetailsPanel: (open?: boolean) => void;
   addComment: (ticketId: string, body: string, isInternal: boolean) => Promise<void>;
+  openCreateTicketPanel: (typeId: string) => void;
+  closeCreateTicketPanel: () => void;
+  createTicket: (payload: Omit<CreateTicketPayload, 'ticketTypeId'>) => Promise<boolean>;
 };
 
 export function filterTicketsByView(
@@ -125,6 +136,7 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
     tickets: [],
     statuses: [],
     types: [],
+    projects: [],
     currentUser: getStoredUser(),
     activeView: 'all_tickets',
     activeTicketId: null,
@@ -138,20 +150,26 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
     detailLoadedIds: new Set(),
     isSubmittingComment: false,
     commentError: null,
+    isCreatePanelOpen: false,
+    createDraftTypeId: null,
+    isCreatingTicket: false,
+    createTicketError: null,
 
     loadInitialData: async () => {
       set({ isLoading: true, error: null });
       try {
-        const [apiTickets, apiStatuses, apiTypes] = await Promise.all([
+        const [apiTickets, apiStatuses, apiTypes, apiProjects] = await Promise.all([
           getTickets(),
           getTicketStatuses(),
           getTicketTypes(),
+          getProjects(),
         ]);
         const tickets = apiTickets.map(mapTicket);
         set({
           tickets,
           statuses: apiStatuses.map(mapStatus),
           types: apiTypes.map(mapType),
+          projects: apiProjects.map(mapProject),
           isLoading: false,
         });
         get().setActiveTicketId(tickets[0]?.id ?? null);
@@ -263,6 +281,37 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
           commentError:
             err instanceof ApiError ? err.message : "Impossible d'envoyer le commentaire.",
         });
+      }
+    },
+
+    openCreateTicketPanel: (typeId) =>
+      set({ isCreatePanelOpen: true, createDraftTypeId: typeId, createTicketError: null }),
+
+    closeCreateTicketPanel: () =>
+      set({ isCreatePanelOpen: false, createDraftTypeId: null, createTicketError: null }),
+
+    createTicket: async (payload) => {
+      const typeId = get().createDraftTypeId;
+      if (!typeId) return false;
+
+      set({ isCreatingTicket: true, createTicketError: null });
+      try {
+        const apiTicket = await createTicketRequest({ ...payload, ticketTypeId: typeId });
+        const ticket = mapTicket(apiTicket);
+        set((state) => ({
+          tickets: [ticket, ...state.tickets],
+          isCreatingTicket: false,
+          isCreatePanelOpen: false,
+          createDraftTypeId: null,
+        }));
+        get().setActiveTicketId(ticket.id);
+        return true;
+      } catch (err) {
+        set({
+          isCreatingTicket: false,
+          createTicketError: err instanceof ApiError ? err.message : 'Impossible de créer le ticket.',
+        });
+        return false;
       }
     },
   };
