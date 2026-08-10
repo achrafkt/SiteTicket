@@ -182,29 +182,34 @@ model Ticket {
 }
 
 model TicketComment {
-  id           String   @id @default(uuid()) @db.Uuid
-  ticket_id    String   @db.Uuid
-  user_id      String   @db.Uuid
+  id           String             @id @default(uuid()) @db.Uuid
+  ticket_id    String             @db.Uuid
+  user_id      String             @db.Uuid
   comment_text String
-  is_internal  Boolean  @default(true)
-  created_at   DateTime @default(now())
-  ticket       Ticket   @relation(fields: [ticket_id], references: [id])
-  user         User     @relation(fields: [user_id], references: [id])
+  is_internal  Boolean            @default(true)
+  created_at   DateTime           @default(now())
+  ticket       Ticket             @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+  user         User               @relation(fields: [user_id], references: [id])
+  attachments  TicketAttachment[]
 
   @@map("ticket_comments")
 }
 
 model TicketAttachment {
-  id          String   @id @default(uuid()) @db.Uuid
-  ticket_id   String   @db.Uuid
+  id          String         @id @default(uuid()) @db.Uuid
+  ticket_id   String         @db.Uuid
+  comment_id  String?        @db.Uuid
   file_url    String
+  file_name   String
   file_type   String?
-  uploaded_by String   @db.Uuid
-  uploaded_at DateTime @default(now())
+  file_size   Int
+  uploaded_by String         @db.Uuid
+  uploaded_at DateTime       @default(now())
   geo_lat     Float?
   geo_lng     Float?
-  ticket      Ticket   @relation(fields: [ticket_id], references: [id])
-  uploader    User     @relation("TicketAttachmentUploadedBy", fields: [uploaded_by], references: [id])
+  ticket      Ticket         @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+  comment     TicketComment? @relation(fields: [comment_id], references: [id], onDelete: Cascade)
+  uploader    User           @relation("TicketAttachmentUploadedBy", fields: [uploaded_by], references: [id])
 
   @@map("ticket_attachments")
 }
@@ -217,7 +222,7 @@ model TicketStatusHistory {
   changed_by      String        @db.Uuid
   comment         String?
   changed_at      DateTime      @default(now())
-  ticket          Ticket        @relation(fields: [ticket_id], references: [id])
+  ticket          Ticket        @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
   from_status     TicketStatus? @relation("StatusHistoryFrom", fields: [from_status_id], references: [id])
   to_status       TicketStatus  @relation("StatusHistoryTo", fields: [to_status_id], references: [id])
   changed_by_user User          @relation("TicketStatusHistoryChangedBy", fields: [changed_by], references: [id])

@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
-import { RefreshCw, X } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { Paperclip, RefreshCw, X } from 'lucide-react';
 import { useTicketStore } from '@/store/ticket-store';
+import { ALLOWED_ATTACHMENT_MIME_TYPES, MAX_ATTACHMENT_SIZE_BYTES } from '@/lib/tickets-api';
+import { AttachmentThumb } from './AttachmentThumb';
 import { Dropdown } from './Dropdown';
 import { PRIORITY_DOT_CLASSES } from './ticket-visuals';
 import { TICKET_PRIORITY_LABELS, type TicketPriority } from '@/types/ticket';
@@ -20,6 +22,7 @@ export function CreateTicketPanel() {
   const createTicketError = useTicketStore((state) => state.createTicketError);
   const closeCreateTicketPanel = useTicketStore((state) => state.closeCreateTicketPanel);
   const createTicket = useTicketStore((state) => state.createTicket);
+  const uploadTicketAttachment = useTicketStore((state) => state.uploadTicketAttachment);
 
   const type = types.find((candidate) => candidate.id === createDraftTypeId);
 
@@ -31,13 +34,42 @@ export function CreateTicketPanel() {
   const [trade, setTrade] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [assignToMe, setAssignToMe] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [isUploadingFiles, setIsUploadingFiles] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const canSubmit = title.trim().length > 0 && projectId.length > 0 && !isCreatingTicket;
+  const canSubmit = title.trim().length > 0 && projectId.length > 0 && !isCreatingTicket && !isUploadingFiles;
+
+  function handleFilesSelected(fileList: FileList | null) {
+    if (!fileList) return;
+    setFileError(null);
+
+    const accepted: File[] = [];
+    for (const file of Array.from(fileList)) {
+      if (!ALLOWED_ATTACHMENT_MIME_TYPES.includes(file.type)) {
+        setFileError('Types acceptés : images (JPEG, PNG, WebP) ou PDF.');
+        continue;
+      }
+      if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
+        setFileError('Taille maximale : 10 Mo par fichier.');
+        continue;
+      }
+      accepted.push(file);
+    }
+
+    setPendingFiles((current) => [...current, ...accepted]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
+  function removePendingFile(index: number) {
+    setPendingFiles((current) => current.filter((_, i) => i !== index));
+  }
 
   async function handleSubmit() {
     if (!canSubmit) return;
 
-    await createTicket({
+    const ticket = await createTicket({
       title: title.trim(),
       description: description.trim() || undefined,
       projectId,
@@ -47,6 +79,14 @@ export function CreateTicketPanel() {
       dueDate: dueDate || undefined,
       assignedTo: assignToMe ? currentUser?.id : undefined,
     });
+
+    if (ticket && pendingFiles.length > 0) {
+      setIsUploadingFiles(true);
+      for (const file of pendingFiles) {
+        await uploadTicketAttachment(ticket.id, file);
+      }
+      setIsUploadingFiles(false);
+    }
   }
 
   return (
@@ -149,6 +189,40 @@ export function CreateTicketPanel() {
           />
           M&apos;assigner ce ticket
         </label>
+
+        <div>
+          <FieldLabel>Photos / documents</FieldLabel>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept="image/jpeg,image/png,image/webp,application/pdf"
+            onChange={(event) => handleFilesSelected(event.target.files)}
+            className="hidden"
+            id="create-ticket-file-input"
+          />
+          <label
+            htmlFor="create-ticket-file-input"
+            className="flex w-fit cursor-pointer items-center gap-1.5 rounded-md border border-dashed border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-500 hover:border-gray-400 hover:text-gray-700"
+          >
+            <Paperclip size={13} /> Joindre un fichier
+          </label>
+          {fileError ? <p className="mt-1.5 text-xs text-red-600">{fileError}</p> : null}
+          {pendingFiles.length > 0 ? (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {pendingFiles.map((file, index) => (
+                <AttachmentThumb
+                  key={`${file.name}-${index}`}
+                  fileName={file.name}
+                  fileType={file.type}
+                  fileSize={file.size}
+                  onRemove={() => removePendingFile(index)}
+                  disabled={isUploadingFiles}
+                />
+              ))}
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <div className="border-t border-gray-100 bg-white px-5 py-3">
@@ -169,8 +243,8 @@ export function CreateTicketPanel() {
             disabled={!canSubmit}
             className="flex items-center gap-1.5 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:bg-gray-200 disabled:text-gray-400"
           >
-            {isCreatingTicket ? <RefreshCw size={14} className="animate-spin" /> : null}
-            Créer le ticket
+            {isCreatingTicket || isUploadingFiles ? <RefreshCw size={14} className="animate-spin" /> : null}
+            {isUploadingFiles ? 'Envoi des pièces jointes...' : 'Créer le ticket'}
           </button>
         </div>
       </div>

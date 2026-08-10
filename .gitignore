@@ -3,6 +3,7 @@ backend/node_modules/
 web/node_modules/
 backend/dist/
 backend/.env
+backend/uploads/
 web/.env.local
 web/.next/
 coverage/

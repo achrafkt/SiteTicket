@@ -1,11 +1,17 @@
 import { Module } from '@nestjs/common';
+import { TicketAttachmentsController } from './ticket-attachments.controller';
 import { TicketStatusesController } from './ticket-statuses.controller';
 import { TicketTypesController } from './ticket-types.controller';
 import { TicketsController } from './tickets.controller';
 import { TicketsService } from './tickets.service';
 
 @Module({
-  controllers: [TicketsController, TicketTypesController, TicketStatusesController],
+  controllers: [
+    TicketsController,
+    TicketTypesController,
+    TicketStatusesController,
+    TicketAttachmentsController,
+  ],
   providers: [TicketsService],
   exports: [TicketsService],
 })

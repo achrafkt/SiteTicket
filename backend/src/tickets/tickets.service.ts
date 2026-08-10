@@ -1,12 +1,33 @@
+import { basename, join } from 'path';
+import { unlink } from 'fs/promises';
 import {
   BadRequestException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { UPLOADS_DIR, UPLOADS_URL_PREFIX } from '../common/uploads.constants';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
+
+const attachmentSelect = {
+  id: true,
+  comment_id: true,
+  file_url: true,
+  file_name: true,
+  file_type: true,
+  file_size: true,
+  uploaded_at: true,
+  uploader: {
+    select: {
+      id: true,
+      first_name: true,
+      last_name: true,
+      email: true,
+    },
+  },
+} as const;
 
 const ticketSelect = {
   id: true,
@@ -101,7 +122,15 @@ export class TicketsService {
                 email: true,
               },
             },
+            attachments: {
+              orderBy: [{ uploaded_at: 'asc' }],
+              select: attachmentSelect,
+            },
           },
+        },
+        attachments: {
+          orderBy: [{ uploaded_at: 'asc' }],
+          select: attachmentSelect,
         },
         status_history: {
           orderBy: [{ changed_at: 'asc' }],
@@ -244,7 +273,24 @@ export class TicketsService {
 
   async remove(id: string) {
     await this.ensureTicketExists(id);
+
+    const attachments = await this.prisma.ticketAttachment.findMany({
+      where: { ticket_id: id },
+      select: { file_url: true },
+    });
+
     await this.prisma.ticket.delete({ where: { id } });
+
+    await Promise.all(
+      attachments.map(async (attachment) => {
+        try {
+          await unlink(join(UPLOADS_DIR, basename(attachment.file_url)));
+        } catch {
+          // best-effort cleanup: file may already be missing on disk
+        }
+      }),
+    );
+
     return { success: true };
   }
 
@@ -273,6 +319,60 @@ export class TicketsService {
         },
       },
     });
+  }
+
+  async addAttachment(
+    ticketId: string,
+    file: Express.Multer.File,
+    commentId: string | undefined,
+    userId: string,
+  ) {
+    await this.ensureTicketExists(ticketId);
+
+    if (commentId) {
+      const comment = await this.prisma.ticketComment.findUnique({
+        where: { id: commentId },
+        select: { id: true, ticket_id: true },
+      });
+
+      if (!comment || comment.ticket_id !== ticketId) {
+        throw new BadRequestException("Le commentaire sélectionné est introuvable pour ce ticket.");
+      }
+    }
+
+    return this.prisma.ticketAttachment.create({
+      data: {
+        ticket_id: ticketId,
+        comment_id: commentId ?? null,
+        file_url: `${UPLOADS_URL_PREFIX}/${file.filename}`,
+        file_name: file.originalname,
+        file_type: file.mimetype,
+        file_size: file.size,
+        uploaded_by: userId,
+      },
+      select: attachmentSelect,
+    });
+  }
+
+  async removeAttachment(ticketId: string, attachmentId: string) {
+    const attachment = await this.prisma.ticketAttachment.findUnique({
+      where: { id: attachmentId },
+      select: { id: true, ticket_id: true, file_url: true },
+    });
+
+    if (!attachment || attachment.ticket_id !== ticketId) {
+      throw new NotFoundException('Pièce jointe introuvable.');
+    }
+
+    await this.prisma.ticketAttachment.delete({ where: { id: attachmentId } });
+
+    try {
+      await unlink(join(UPLOADS_DIR, basename(attachment.file_url)));
+    } catch {
+      // best-effort cleanup: file may already be missing on disk
+    }
+
+    return { success: true };
   }
 
   private async generateTicketNumber() {

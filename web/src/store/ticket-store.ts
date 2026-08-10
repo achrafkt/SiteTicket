@@ -1,20 +1,32 @@
 import { create } from 'zustand';
 import { ApiError } from '@/lib/api';
 import { getStoredUser } from '@/lib/current-user';
-import { mapComment, mapProject, mapStatus, mapTicket, mapType } from '@/lib/ticket-mapper';
+import { mapAttachment, mapComment, mapProject, mapStatus, mapTicket, mapType } from '@/lib/ticket-mapper';
 import { isTicketOverdue } from '@/lib/ticket-rules';
 import {
   createComment,
   createTicket as createTicketRequest,
+  deleteAttachment,
+  deleteTicket as deleteTicketRequest,
   getProjects,
   getTicket,
   getTicketStatuses,
   getTicketTypes,
   getTickets,
   updateTicket,
+  uploadAttachment,
   type CreateTicketPayload,
 } from '@/lib/tickets-api';
-import type { Person, Project, Ticket, TicketPriority, TicketStatus, TicketType } from '@/types/ticket';
+import type {
+  Attachment,
+  Person,
+  Project,
+  Ticket,
+  TicketMessage,
+  TicketPriority,
+  TicketStatus,
+  TicketType,
+} from '@/types/ticket';
 
 export type ViewKey =
   | 'my_tickets'
@@ -48,6 +60,8 @@ type TicketStoreState = {
   createDraftTypeId: string | null;
   isCreatingTicket: boolean;
   createTicketError: string | null;
+  isUploadingAttachment: boolean;
+  attachmentError: string | null;
   loadInitialData: () => Promise<void>;
   setActiveView: (view: ViewKey) => void;
   setActiveTicketId: (id: string | null) => void;
@@ -57,10 +71,17 @@ type TicketStoreState = {
   assignTicketToCurrentUser: (id: string) => Promise<void>;
   toggleKnowledgePanel: (open?: boolean) => void;
   toggleDetailsPanel: (open?: boolean) => void;
-  addComment: (ticketId: string, body: string, isInternal: boolean) => Promise<void>;
+  addComment: (ticketId: string, body: string, isInternal: boolean) => Promise<TicketMessage | null>;
   openCreateTicketPanel: (typeId: string) => void;
   closeCreateTicketPanel: () => void;
-  createTicket: (payload: Omit<CreateTicketPayload, 'ticketTypeId'>) => Promise<boolean>;
+  createTicket: (payload: Omit<CreateTicketPayload, 'ticketTypeId'>) => Promise<Ticket | null>;
+  deleteTicket: (id: string) => Promise<boolean>;
+  uploadTicketAttachment: (
+    ticketId: string,
+    file: File,
+    commentId?: string,
+  ) => Promise<Attachment | null>;
+  deleteTicketAttachment: (ticketId: string, attachmentId: string) => Promise<void>;
 };
 
 export function filterTicketsByView(
@@ -154,6 +175,8 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
     createDraftTypeId: null,
     isCreatingTicket: false,
     createTicketError: null,
+    isUploadingAttachment: false,
+    attachmentError: null,
 
     loadInitialData: async () => {
       set({ isLoading: true, error: null });
@@ -275,12 +298,14 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
           ),
           isSubmittingComment: false,
         }));
+        return comment;
       } catch (err) {
         set({
           isSubmittingComment: false,
           commentError:
             err instanceof ApiError ? err.message : "Impossible d'envoyer le commentaire.",
         });
+        return null;
       }
     },
 
@@ -292,7 +317,7 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
 
     createTicket: async (payload) => {
       const typeId = get().createDraftTypeId;
-      if (!typeId) return false;
+      if (!typeId) return null;
 
       set({ isCreatingTicket: true, createTicketError: null });
       try {
@@ -305,13 +330,94 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
           createDraftTypeId: null,
         }));
         get().setActiveTicketId(ticket.id);
-        return true;
+        return ticket;
       } catch (err) {
         set({
           isCreatingTicket: false,
           createTicketError: err instanceof ApiError ? err.message : 'Impossible de créer le ticket.',
         });
+        return null;
+      }
+    },
+
+    deleteTicket: async (id) => {
+      const previous = get().tickets;
+      const wasActive = get().activeTicketId === id;
+      const remaining = previous.filter((ticket) => ticket.id !== id);
+
+      set({ tickets: remaining, activeTicketId: wasActive ? remaining[0]?.id ?? null : get().activeTicketId });
+
+      try {
+        await deleteTicketRequest(id);
+        return true;
+      } catch (err) {
+        set({
+          tickets: previous,
+          activeTicketId: wasActive ? id : get().activeTicketId,
+          error: err instanceof ApiError ? err.message : 'Impossible de supprimer le ticket.',
+        });
         return false;
+      }
+    },
+
+    uploadTicketAttachment: async (ticketId, file, commentId) => {
+      set({ isUploadingAttachment: true, attachmentError: null });
+      try {
+        const apiAttachment = await uploadAttachment(ticketId, file, commentId);
+        const attachment = mapAttachment(apiAttachment);
+        set((state) => ({
+          tickets: state.tickets.map((ticket) => {
+            if (ticket.id !== ticketId) return ticket;
+            return {
+              ...ticket,
+              attachments: [...ticket.attachments, attachment],
+              messages: commentId
+                ? ticket.messages.map((message) =>
+                    message.id === commentId
+                      ? { ...message, attachments: [...message.attachments, attachment] }
+                      : message,
+                  )
+                : ticket.messages,
+            };
+          }),
+          isUploadingAttachment: false,
+        }));
+        return attachment;
+      } catch (err) {
+        set({
+          isUploadingAttachment: false,
+          attachmentError:
+            err instanceof ApiError ? err.message : "Impossible d'envoyer la pièce jointe.",
+        });
+        return null;
+      }
+    },
+
+    deleteTicketAttachment: async (ticketId, attachmentId) => {
+      const previous = get().tickets;
+      set((state) => ({
+        tickets: state.tickets.map((ticket) =>
+          ticket.id === ticketId
+            ? {
+                ...ticket,
+                attachments: ticket.attachments.filter((attachment) => attachment.id !== attachmentId),
+                messages: ticket.messages.map((message) => ({
+                  ...message,
+                  attachments: message.attachments.filter((attachment) => attachment.id !== attachmentId),
+                })),
+              }
+            : ticket,
+        ),
+      }));
+
+      try {
+        await deleteAttachment(ticketId, attachmentId);
+      } catch (err) {
+        set({
+          tickets: previous,
+          attachmentError:
+            err instanceof ApiError ? err.message : 'Impossible de supprimer la pièce jointe.',
+        });
       }
     },
   };

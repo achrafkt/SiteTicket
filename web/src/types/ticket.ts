@@ -48,6 +48,16 @@ export type Project = {
   code: string;
 };
 
+export type Attachment = {
+  id: string;
+  fileUrl: string;
+  fileName: string;
+  fileType: string | null;
+  fileSize: number;
+  uploadedAt: string;
+  uploadedBy: Person;
+};
+
 export type TicketMessage = {
   id: string;
   authorName: string;
@@ -55,6 +65,7 @@ export type TicketMessage = {
   isInternal: boolean;
   body: string;
   createdAt: string;
+  attachments: Attachment[];
 };
 
 export type TicketStatusHistoryEntry = {
@@ -99,6 +110,7 @@ export type Ticket = {
   statusHistory: TicketStatusHistoryEntry[];
   subTasks: SubTask[];
   linkedTicketIds: string[];
+  attachments: Attachment[];
 };
 
 export const TICKET_PRIORITY_LABELS: Record<TicketPriority, string> = {

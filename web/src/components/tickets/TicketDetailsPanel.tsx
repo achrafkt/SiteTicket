@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight, Plus, RefreshCw, X } from 'lucide-react';
 import { useTicketStore } from '@/store/ticket-store';
 import { getDueDateUrgency } from '@/lib/ticket-rules';
 import { Avatar } from './Avatar';
+import { AttachmentThumb } from './AttachmentThumb';
 import { Dropdown } from './Dropdown';
 import {
   DUE_DATE_TEXT_CLASSES,
@@ -56,6 +57,7 @@ export function TicketDetailsPanel({ ticket }: { ticket: Ticket }) {
   const updateTicketStatus = useTicketStore((state) => state.updateTicketStatus);
   const updateTicketPriority = useTicketStore((state) => state.updateTicketPriority);
   const assignTicketToCurrentUser = useTicketStore((state) => state.assignTicketToCurrentUser);
+  const deleteTicketAttachment = useTicketStore((state) => state.deleteTicketAttachment);
   const toggleDetailsPanel = useTicketStore((state) => state.toggleDetailsPanel);
   const detailLoadingId = useTicketStore((state) => state.detailLoadingId);
   const detailError = useTicketStore((state) => state.detailError);
@@ -271,6 +273,25 @@ export function TicketDetailsPanel({ ticket }: { ticket: Ticket }) {
                 <li key={id}>{id}</li>
               ))}
             </ul>
+          )}
+        </CollapsibleSection>
+
+        <CollapsibleSection title="Pièces jointes" count={ticket.attachments.length}>
+          {ticket.attachments.length === 0 ? (
+            <p className="text-xs text-gray-400">Aucune pièce jointe.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {ticket.attachments.map((attachment) => (
+                <AttachmentThumb
+                  key={attachment.id}
+                  fileName={attachment.fileName}
+                  fileType={attachment.fileType}
+                  fileSize={attachment.fileSize}
+                  fileUrl={attachment.fileUrl}
+                  onRemove={() => deleteTicketAttachment(ticket.id, attachment.id)}
+                />
+              ))}
+            </div>
           )}
         </CollapsibleSection>
 

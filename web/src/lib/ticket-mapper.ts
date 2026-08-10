@@ -1,4 +1,6 @@
+import { API_URL } from './api';
 import type {
+  ApiAttachment,
   ApiComment,
   ApiProject,
   ApiStatusHistoryEntry,
@@ -8,6 +10,7 @@ import type {
   ApiUserRef,
 } from './tickets-api';
 import type {
+  Attachment,
   Person,
   Project,
   Ticket,
@@ -31,6 +34,18 @@ export function mapPerson(user: ApiUserRef): Person {
   };
 }
 
+export function mapAttachment(attachment: ApiAttachment): Attachment {
+  return {
+    id: attachment.id,
+    fileUrl: `${API_URL}${attachment.file_url}`,
+    fileName: attachment.file_name,
+    fileType: attachment.file_type,
+    fileSize: attachment.file_size,
+    uploadedAt: attachment.uploaded_at,
+    uploadedBy: mapPerson(attachment.uploader),
+  };
+}
+
 export function mapComment(comment: ApiComment): TicketMessage {
   return {
     id: comment.id,
@@ -39,6 +54,7 @@ export function mapComment(comment: ApiComment): TicketMessage {
     isInternal: comment.is_internal,
     body: comment.comment_text,
     createdAt: comment.created_at,
+    attachments: (comment.attachments ?? []).map(mapAttachment),
   };
 }
 
@@ -108,5 +124,6 @@ export function mapTicket(apiTicket: ApiTicket): Ticket {
     statusHistory: (apiTicket.status_history ?? []).map(mapStatusHistoryEntry),
     subTasks: [],
     linkedTicketIds: [],
+    attachments: (apiTicket.attachments ?? []).map(mapAttachment),
   };
 }

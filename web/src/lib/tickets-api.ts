@@ -24,12 +24,24 @@ export type ApiTicketType = {
   requires_approval_chain: boolean;
 };
 
+export type ApiAttachment = {
+  id: string;
+  comment_id: string | null;
+  file_url: string;
+  file_name: string;
+  file_type: string | null;
+  file_size: number;
+  uploaded_at: string;
+  uploader: ApiUserRef;
+};
+
 export type ApiComment = {
   id: string;
   comment_text: string;
   is_internal: boolean;
   created_at: string;
   user: ApiUserRef;
+  attachments?: ApiAttachment[];
 };
 
 export type ApiStatusHistoryEntry = {
@@ -63,6 +75,7 @@ export type ApiTicket = {
   assigned_to_user: ApiUserRef | null;
   comments?: ApiComment[];
   status_history?: ApiStatusHistoryEntry[];
+  attachments?: ApiAttachment[];
 };
 
 export type ApiProject = {
@@ -111,6 +124,28 @@ export function getProjects() {
   return apiFetch<ApiProject[]>('/projects');
 }
 
+export const ALLOWED_ATTACHMENT_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+export const MAX_ATTACHMENT_SIZE_BYTES = 10 * 1024 * 1024;
+
+export function uploadAttachment(ticketId: string, file: File, commentId?: string) {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (commentId) {
+    formData.append('commentId', commentId);
+  }
+
+  return apiFetch<ApiAttachment>(`/tickets/${ticketId}/attachments`, {
+    method: 'POST',
+    body: formData,
+  });
+}
+
+export function deleteAttachment(ticketId: string, attachmentId: string) {
+  return apiFetch<{ success: boolean }>(`/tickets/${ticketId}/attachments/${attachmentId}`, {
+    method: 'DELETE',
+  });
+}
+
 export function getTicket(id: string) {
   return apiFetch<ApiTicket>(`/tickets/${id}`);
 }
@@ -119,6 +154,12 @@ export function updateTicket(id: string, payload: UpdateTicketPayload) {
   return apiFetch<ApiTicket>(`/tickets/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(payload),
+  });
+}
+
+export function deleteTicket(id: string) {
+  return apiFetch<{ success: boolean }>(`/tickets/${id}`, {
+    method: 'DELETE',
   });
 }
 

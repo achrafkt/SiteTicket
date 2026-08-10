@@ -19,10 +19,13 @@ import {
   BookTemplate,
   Braces,
   RefreshCw,
+  Trash2,
 } from 'lucide-react';
 import { useTicketStore } from '@/store/ticket-store';
 import { useTicketCollaboration } from '@/hooks/useTicketCollaboration';
+import { ALLOWED_ATTACHMENT_MIME_TYPES, MAX_ATTACHMENT_SIZE_BYTES } from '@/lib/tickets-api';
 import { Avatar } from './Avatar';
+import { AttachmentThumb } from './AttachmentThumb';
 import { formatDateTime } from './ticket-visuals';
 import type { Ticket, TicketMessage } from '@/types/ticket';
 
@@ -53,7 +56,8 @@ const MACRO_VARIABLES = [
   { id: 'var-4', label: 'Numéro de ticket', token: '{{numero_ticket}}' },
 ];
 
-function MessageItem({ message }: { message: TicketMessage }) {
+function MessageItem({ message, ticketId }: { message: TicketMessage; ticketId: string }) {
+  const deleteTicketAttachment = useTicketStore((state) => state.deleteTicketAttachment);
   const [collapsed, setCollapsed] = useState(false);
   const isLong = message.body.length > 220;
 
@@ -93,6 +97,21 @@ function MessageItem({ message }: { message: TicketMessage }) {
       {!collapsed ? (
         <p className="mt-2 whitespace-pre-wrap text-sm text-gray-700">{message.body}</p>
       ) : null}
+
+      {!collapsed && message.attachments.length > 0 ? (
+        <div className="mt-2.5 flex flex-wrap gap-2">
+          {message.attachments.map((attachment) => (
+            <AttachmentThumb
+              key={attachment.id}
+              fileName={attachment.fileName}
+              fileType={attachment.fileType}
+              fileSize={attachment.fileSize}
+              fileUrl={attachment.fileUrl}
+              onRemove={() => deleteTicketAttachment(ticketId, attachment.id)}
+            />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -102,6 +121,8 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
   const addComment = useTicketStore((state) => state.addComment);
   const isSubmittingComment = useTicketStore((state) => state.isSubmittingComment);
   const commentError = useTicketStore((state) => state.commentError);
+  const uploadTicketAttachment = useTicketStore((state) => state.uploadTicketAttachment);
+  const deleteTicket = useTicketStore((state) => state.deleteTicket);
   const toggleKnowledgePanel = useTicketStore((state) => state.toggleKnowledgePanel);
   const toggleDetailsPanel = useTicketStore((state) => state.toggleDetailsPanel);
   const isDetailsPanelOpen = useTicketStore((state) => state.isDetailsPanelOpen);
@@ -111,7 +132,14 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
   const [addToKnowledge, setAddToKnowledge] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
   const [openMenu, setOpenMenu] = useState<'template' | 'macro' | null>(null);
+  const [isActionsMenuOpen, setActionsMenuOpen] = useState(false);
+  const [isDeletingTicket, setIsDeletingTicket] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [isUploadingFiles, setIsUploadingFiles] = useState(false);
   const toolbarRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const actionsMenuRef = useRef<HTMLDivElement>(null);
 
   const { activeEditor, announceEditing, takeControl, simulateRemoteEditor } = useTicketCollaboration(
     ticket.id,
@@ -142,6 +170,29 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [openMenu]);
 
+  useEffect(() => {
+    if (!isActionsMenuOpen) return;
+    function handleClickOutside(event: MouseEvent) {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(event.target as Node)) {
+        setActionsMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isActionsMenuOpen]);
+
+  async function handleDeleteTicket() {
+    const confirmed = window.confirm(
+      `Supprimer définitivement le ticket "${ticket.title}" ? Cette action est irréversible.`,
+    );
+    if (!confirmed) return;
+
+    setActionsMenuOpen(false);
+    setIsDeletingTicket(true);
+    await deleteTicket(ticket.id);
+    setIsDeletingTicket(false);
+  }
+
   function insertTemplate(templateBody: string) {
     setBody((current) => (current.trim() ? `${current}\n\n${templateBody}` : templateBody));
     setOpenMenu(null);
@@ -152,12 +203,46 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
     setOpenMenu(null);
   }
 
+  function handleFilesSelected(fileList: FileList | null) {
+    if (!fileList) return;
+    setFileError(null);
+
+    const accepted: File[] = [];
+    for (const file of Array.from(fileList)) {
+      if (!ALLOWED_ATTACHMENT_MIME_TYPES.includes(file.type)) {
+        setFileError('Types acceptés : images (JPEG, PNG, WebP) ou PDF.');
+        continue;
+      }
+      if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
+        setFileError('Taille maximale : 10 Mo par fichier.');
+        continue;
+      }
+      accepted.push(file);
+    }
+
+    setPendingFiles((current) => [...current, ...accepted]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
+  function removePendingFile(index: number) {
+    setPendingFiles((current) => current.filter((_, i) => i !== index));
+  }
+
   async function handleSend() {
     if (!body.trim() || isSubmittingComment) return;
 
-    await addComment(ticket.id, body, tab === 'private');
+    const comment = await addComment(ticket.id, body, tab === 'private');
 
-    if (!useTicketStore.getState().commentError) {
+    if (comment) {
+      if (pendingFiles.length > 0) {
+        setIsUploadingFiles(true);
+        for (const file of pendingFiles) {
+          await uploadTicketAttachment(ticket.id, file, comment.id);
+        }
+        setIsUploadingFiles(false);
+        setPendingFiles([]);
+      }
+
       setBody('');
       setDraftSavedAt(null);
 
@@ -183,9 +268,28 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
           <span title="Observateurs" className="flex items-center gap-1 rounded-md px-1.5 py-1.5 text-xs">
             <Eye size={16} /> {ticket.watchersCount}
           </span>
-          <button type="button" title="Actions" className="rounded-md p-1.5 hover:bg-gray-100 hover:text-gray-600">
-            <MoreHorizontal size={16} />
-          </button>
+          <div className="relative" ref={actionsMenuRef}>
+            <button
+              type="button"
+              title="Actions"
+              onClick={() => setActionsMenuOpen((value) => !value)}
+              disabled={isDeletingTicket}
+              className="rounded-md p-1.5 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-50"
+            >
+              {isDeletingTicket ? <RefreshCw size={16} className="animate-spin" /> : <MoreHorizontal size={16} />}
+            </button>
+            {isActionsMenuOpen ? (
+              <div className="absolute right-0 top-full z-20 mt-1.5 w-56 rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+                <button
+                  type="button"
+                  onClick={handleDeleteTicket}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                >
+                  <Trash2 size={14} /> Supprimer le ticket
+                </button>
+              </div>
+            ) : null}
+          </div>
           <button
             type="button"
             title={isDetailsPanelOpen ? 'Réduire le panneau' : 'Afficher le panneau'}
@@ -199,7 +303,7 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
 
       <div className="helpdesk-scroll flex-1 space-y-3 overflow-y-auto px-5 py-4">
         {ticket.messages.map((message) => (
-          <MessageItem key={message.id} message={message} />
+          <MessageItem key={message.id} message={message} ticketId={ticket.id} />
         ))}
       </div>
 
@@ -272,7 +376,20 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
             <button type="button" className="rounded p-1 hover:bg-gray-100" title="Image">
               <ImageIcon size={14} />
             </button>
-            <button type="button" className="rounded p-1 hover:bg-gray-100" title="Pièce jointe">
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/jpeg,image/png,image/webp,application/pdf"
+              onChange={(event) => handleFilesSelected(event.target.files)}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="rounded p-1 hover:bg-gray-100"
+              title="Pièce jointe"
+            >
               <Paperclip size={14} />
             </button>
 
@@ -330,6 +447,23 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
             </div>
           </div>
 
+          {fileError ? <p className="px-3 pt-2 text-xs text-red-600">{fileError}</p> : null}
+
+          {pendingFiles.length > 0 ? (
+            <div className="flex flex-wrap gap-2 border-b border-gray-100 px-3 py-2">
+              {pendingFiles.map((file, index) => (
+                <AttachmentThumb
+                  key={`${file.name}-${index}`}
+                  fileName={file.name}
+                  fileType={file.type}
+                  fileSize={file.size}
+                  onRemove={() => removePendingFile(index)}
+                  disabled={isUploadingFiles}
+                />
+              ))}
+            </div>
+          ) : null}
+
           <textarea
             value={body}
             onChange={(event) => setBody(event.target.value)}
@@ -355,11 +489,11 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
             <button
               type="button"
               onClick={handleSend}
-              disabled={!body.trim() || isBlockedByOtherEditor || isSubmittingComment}
+              disabled={!body.trim() || isBlockedByOtherEditor || isSubmittingComment || isUploadingFiles}
               className="flex h-8 w-8 items-center justify-center rounded-md bg-blue-600 text-white disabled:bg-gray-200 disabled:text-gray-400"
               title="Envoyer"
             >
-              {isSubmittingComment ? (
+              {isSubmittingComment || isUploadingFiles ? (
                 <RefreshCw size={15} className="animate-spin" />
               ) : (
                 <Send size={15} />
