@@ -4,7 +4,7 @@ import { Clock } from 'lucide-react';
 import type { Ticket } from '@/types/ticket';
 import { isTicketOverdue } from '@/lib/ticket-rules';
 import { AvatarStack } from './Avatar';
-import { PRIORITY_DOT_CLASSES, STATUS_BADGE_CLASSES, formatShortDate } from './ticket-visuals';
+import { PRIORITY_ICONS, PRIORITY_ICON_CLASSES, STATUS_BADGE_CLASSES, formatShortDate } from './ticket-visuals';
 
 type TicketCardProps = {
   ticket: Ticket;
@@ -15,6 +15,8 @@ type TicketCardProps = {
 };
 
 export function TicketCard({ ticket, isSelected, isChecked, onSelect, onToggleCheck }: TicketCardProps) {
+  const PriorityIcon = PRIORITY_ICONS[ticket.priority];
+
   return (
     <div
       role="button"
@@ -67,17 +69,17 @@ export function TicketCard({ ticket, isSelected, isChecked, onSelect, onToggleCh
 
         <div className="mt-3 flex items-center justify-between gap-3">
           <div className="min-w-0 flex items-center gap-1.5">
-            <span
-              className={`h-2.5 w-2.5 shrink-0 rounded-full ring-2 ring-white ${PRIORITY_DOT_CLASSES[ticket.priority]}`}
-              title={ticket.priority}
-            />
+            <span className="inline-flex shrink-0" title={ticket.priority}>
+              <PriorityIcon size={14} strokeWidth={2.5} className={PRIORITY_ICON_CLASSES[ticket.priority]} />
+            </span>
             <AvatarStack people={ticket.assignees} />
           </div>
           <span
-            className={`rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.14em] ${
+            className={`flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.14em] ${
               isSelected ? 'bg-white text-blue-700' : 'bg-slate-100 text-slate-500'
             }`}
           >
+            <PriorityIcon size={12} strokeWidth={2.5} className={PRIORITY_ICON_CLASSES[ticket.priority]} />
             Priorité {ticket.priority}
           </span>
         </div>

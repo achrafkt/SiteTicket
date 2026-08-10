@@ -93,7 +93,7 @@ export type UpdateTicketPayload = Partial<{
   trade: string;
   externalParty: string;
   dueDate: string;
-  assignedTo: string;
+  assignedTo: string | null;
   statusId: string;
 }>;
 
@@ -176,4 +176,8 @@ export function getTicketStatuses() {
 
 export function getTicketTypes() {
   return apiFetch<ApiTicketType[]>('/ticket-types');
+}
+
+export function getAssignableUsers() {
+  return apiFetch<ApiUserRef[]>('/users/assignable');
 }

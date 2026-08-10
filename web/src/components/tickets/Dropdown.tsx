@@ -2,11 +2,15 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, Check } from 'lucide-react';
+import { Avatar } from './Avatar';
 
 export type DropdownOption = {
   value: string;
   label: string;
   dotClassName?: string;
+  initials?: string;
+  icon?: React.ElementType;
+  iconClassName?: string;
 };
 
 type DropdownProps = {
@@ -14,9 +18,24 @@ type DropdownProps = {
   options: DropdownOption[];
   onChange: (value: string) => void;
   className?: string;
+  placeholder?: string;
 };
 
-export function Dropdown({ value, options, onChange, className = '' }: DropdownProps) {
+function OptionIndicator({ option }: { option: DropdownOption }) {
+  if (option.icon) {
+    const Icon = option.icon;
+    return <Icon size={15} className={`shrink-0 ${option.iconClassName ?? 'text-gray-400'}`} strokeWidth={2.5} />;
+  }
+  if (option.initials) {
+    return <Avatar initials={option.initials} />;
+  }
+  if (option.dotClassName) {
+    return <span className={`h-2 w-2 shrink-0 rounded-full transition-colors ${option.dotClassName}`} />;
+  }
+  return null;
+}
+
+export function Dropdown({ value, options, onChange, className = '', placeholder = '—' }: DropdownProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -43,11 +62,9 @@ export function Dropdown({ value, options, onChange, className = '' }: DropdownP
             : 'border-gray-200 hover:border-gray-300'
         }`}
       >
-        {selected?.dotClassName ? (
-          <span className={`h-2 w-2 shrink-0 rounded-full transition-colors ${selected.dotClassName}`} />
-        ) : null}
+        {selected ? <OptionIndicator option={selected} /> : null}
         <span className="w-full min-w-0 truncate text-sm font-medium text-gray-700">
-          {selected?.label ?? '—'}
+          {selected?.label ?? placeholder}
         </span>
         <ChevronDown
           size={14}
@@ -71,9 +88,7 @@ export function Dropdown({ value, options, onChange, className = '' }: DropdownP
                   isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'
                 }`}
               >
-                {option.dotClassName ? (
-                  <span className={`h-2 w-2 shrink-0 rounded-full ${option.dotClassName}`} />
-                ) : null}
+                <OptionIndicator option={option} />
                 <span className="min-w-0 flex-1 truncate font-medium">{option.label}</span>
                 {isActive ? <Check size={14} className="shrink-0 text-blue-600" /> : null}
               </button>

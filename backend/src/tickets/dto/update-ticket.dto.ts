@@ -43,7 +43,7 @@ export class UpdateTicketDto {
 
   @IsUUID()
   @IsOptional()
-  assignedTo?: string;
+  assignedTo?: string | null;
 
   @IsUUID()
   @IsOptional()

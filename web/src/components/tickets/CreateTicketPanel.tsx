@@ -6,7 +6,7 @@ import { useTicketStore } from '@/store/ticket-store';
 import { ALLOWED_ATTACHMENT_MIME_TYPES, MAX_ATTACHMENT_SIZE_BYTES } from '@/lib/tickets-api';
 import { AttachmentThumb } from './AttachmentThumb';
 import { Dropdown } from './Dropdown';
-import { PRIORITY_DOT_CLASSES } from './ticket-visuals';
+import { PRIORITY_ICONS, PRIORITY_ICON_CLASSES } from './ticket-visuals';
 import { TICKET_PRIORITY_LABELS, type TicketPriority } from '@/types/ticket';
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
@@ -16,6 +16,7 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 export function CreateTicketPanel() {
   const types = useTicketStore((state) => state.types);
   const projects = useTicketStore((state) => state.projects);
+  const users = useTicketStore((state) => state.users);
   const currentUser = useTicketStore((state) => state.currentUser);
   const createDraftTypeId = useTicketStore((state) => state.createDraftTypeId);
   const isCreatingTicket = useTicketStore((state) => state.isCreatingTicket);
@@ -33,7 +34,7 @@ export function CreateTicketPanel() {
   const [locationZone, setLocationZone] = useState('');
   const [trade, setTrade] = useState('');
   const [dueDate, setDueDate] = useState('');
-  const [assignToMe, setAssignToMe] = useState(false);
+  const [assignedUserId, setAssignedUserId] = useState('');
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
   const [isUploadingFiles, setIsUploadingFiles] = useState(false);
@@ -77,7 +78,7 @@ export function CreateTicketPanel() {
       locationZone: locationZone.trim() || undefined,
       trade: trade.trim() || undefined,
       dueDate: dueDate || undefined,
-      assignedTo: assignToMe ? currentUser?.id : undefined,
+      assignedTo: assignedUserId || undefined,
     });
 
     if (ticket && pendingFiles.length > 0) {
@@ -145,7 +146,8 @@ export function CreateTicketPanel() {
             options={(Object.keys(TICKET_PRIORITY_LABELS) as TicketPriority[]).map((code) => ({
               value: code,
               label: TICKET_PRIORITY_LABELS[code],
-              dotClassName: PRIORITY_DOT_CLASSES[code],
+              icon: PRIORITY_ICONS[code],
+              iconClassName: PRIORITY_ICON_CLASSES[code],
             }))}
           />
         </div>
@@ -180,15 +182,32 @@ export function CreateTicketPanel() {
           />
         </div>
 
-        <label className="flex items-center gap-2 text-sm text-gray-700">
-          <input
-            type="checkbox"
-            checked={assignToMe}
-            onChange={(event) => setAssignToMe(event.target.checked)}
-            className="h-3.5 w-3.5 rounded border-gray-300"
+        <div>
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <FieldLabel>Assigné à</FieldLabel>
+            {currentUser && assignedUserId !== currentUser.id ? (
+              <button
+                type="button"
+                onClick={() => setAssignedUserId(currentUser.id)}
+                className="mb-1.5 shrink-0 whitespace-nowrap text-[11px] font-medium text-blue-600 hover:underline"
+              >
+                M&apos;assigner ce ticket
+              </button>
+            ) : null}
+          </div>
+          <Dropdown
+            value={assignedUserId}
+            onChange={setAssignedUserId}
+            options={[
+              { value: '', label: 'Non assigné' },
+              ...users.map((user) => ({
+                value: user.id,
+                label: user.id === currentUser?.id ? `${user.name} (moi)` : user.name,
+                initials: user.initials,
+              })),
+            ]}
           />
-          M&apos;assigner ce ticket
-        </label>
+        </div>
 
         <div>
           <FieldLabel>Photos / documents</FieldLabel>

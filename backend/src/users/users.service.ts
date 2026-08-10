@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { RoleCode } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -36,6 +37,27 @@ export class UsersService {
     return this.prisma.user.findMany({
       orderBy: [{ created_at: 'desc' }],
       select: userSelect,
+    });
+  }
+
+  /**
+   * Users that a ticket can be assigned to. Observateur is a read-only role
+   * (see seed data), so it is excluded, along with deactivated accounts.
+   */
+  findAssignable() {
+    return this.prisma.user.findMany({
+      where: {
+        is_active: true,
+        role: { code: { not: RoleCode.observateur } },
+      },
+      orderBy: [{ first_name: 'asc' }, { last_name: 'asc' }],
+      select: {
+        id: true,
+        first_name: true,
+        last_name: true,
+        email: true,
+        role: { select: { code: true, name: true } },
+      },
     });
   }
 
@@ -97,7 +119,9 @@ export class UsersService {
       });
 
       if (existingUser) {
-        throw new BadRequestException('Cette adresse e-mail est déjà utilisée.');
+        throw new BadRequestException(
+          'Cette adresse e-mail est déjà utilisée.',
+        );
       }
     }
 
