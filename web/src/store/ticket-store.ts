@@ -51,6 +51,7 @@ type TicketStoreState = {
   isDetailsPanelOpen: boolean;
   isLoading: boolean;
   error: string | null;
+  ticketActionError: string | null;
   detailLoadingId: string | null;
   detailError: string | null;
   detailLoadedIds: Set<string>;
@@ -62,6 +63,7 @@ type TicketStoreState = {
   createTicketError: string | null;
   isUploadingAttachment: boolean;
   attachmentError: string | null;
+  resetSession: (user: Person | null) => void;
   loadInitialData: () => Promise<void>;
   setActiveView: (view: ViewKey) => void;
   setActiveTicketId: (id: string | null) => void;
@@ -119,6 +121,35 @@ export function filterTicketsByView(
   }
 }
 
+function sessionInitialState(user: Person | null) {
+  return {
+    tickets: [] as Ticket[],
+    statuses: [] as TicketStatus[],
+    types: [] as TicketType[],
+    projects: [] as Project[],
+    currentUser: user,
+    activeView: 'all_tickets' as ViewKey,
+    activeTicketId: null,
+    searchTerm: '',
+    isKnowledgePanelOpen: false,
+    isDetailsPanelOpen: true,
+    isLoading: false,
+    error: null,
+    ticketActionError: null,
+    detailLoadingId: null,
+    detailError: null,
+    detailLoadedIds: new Set<string>(),
+    isSubmittingComment: false,
+    commentError: null,
+    isCreatePanelOpen: false,
+    createDraftTypeId: null,
+    isCreatingTicket: false,
+    createTicketError: null,
+    isUploadingAttachment: false,
+    attachmentError: null,
+  };
+}
+
 export const useTicketStore = create<TicketStoreState>((set, get) => {
   async function loadTicketDetail(id: string) {
     set({ detailLoadingId: id, detailError: null });
@@ -154,29 +185,9 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
   }
 
   return {
-    tickets: [],
-    statuses: [],
-    types: [],
-    projects: [],
-    currentUser: getStoredUser(),
-    activeView: 'all_tickets',
-    activeTicketId: null,
-    searchTerm: '',
-    isKnowledgePanelOpen: false,
-    isDetailsPanelOpen: true,
-    isLoading: false,
-    error: null,
-    detailLoadingId: null,
-    detailError: null,
-    detailLoadedIds: new Set(),
-    isSubmittingComment: false,
-    commentError: null,
-    isCreatePanelOpen: false,
-    createDraftTypeId: null,
-    isCreatingTicket: false,
-    createTicketError: null,
-    isUploadingAttachment: false,
-    attachmentError: null,
+    ...sessionInitialState(getStoredUser()),
+
+    resetSession: (user) => set(sessionInitialState(user)),
 
     loadInitialData: async () => {
       set({ isLoading: true, error: null });
@@ -232,6 +243,7 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
               }
             : ticket,
         ),
+        ticketActionError: null,
       }));
 
       try {
@@ -239,7 +251,8 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
       } catch (err) {
         set({
           tickets: previous,
-          error: err instanceof ApiError ? err.message : 'Impossible de mettre à jour le statut.',
+          ticketActionError:
+            err instanceof ApiError ? err.message : 'Impossible de mettre à jour le statut.',
         });
       }
     },
@@ -248,6 +261,7 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
       const previous = get().tickets;
       set((state) => ({
         tickets: state.tickets.map((ticket) => (ticket.id === id ? { ...ticket, priority } : ticket)),
+        ticketActionError: null,
       }));
 
       try {
@@ -255,7 +269,8 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
       } catch (err) {
         set({
           tickets: previous,
-          error: err instanceof ApiError ? err.message : 'Impossible de mettre à jour la priorité.',
+          ticketActionError:
+            err instanceof ApiError ? err.message : 'Impossible de mettre à jour la priorité.',
         });
       }
     },
@@ -269,6 +284,7 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
         tickets: state.tickets.map((ticket) =>
           ticket.id === id ? { ...ticket, assignees: [currentUser] } : ticket,
         ),
+        ticketActionError: null,
       }));
 
       try {
@@ -276,7 +292,7 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
       } catch (err) {
         set({
           tickets: previous,
-          error: err instanceof ApiError ? err.message : "Impossible d'assigner le ticket.",
+          ticketActionError: err instanceof ApiError ? err.message : "Impossible d'assigner le ticket.",
         });
       }
     },

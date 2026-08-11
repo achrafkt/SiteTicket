@@ -8,21 +8,26 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
-  Req,
   UploadedFile,
   UseFilters,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import type { Request } from 'express';
+import { RoleCode } from '@prisma/client';
 import { diskStorage } from 'multer';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { MulterExceptionFilter } from '../common/filters/multer-exception.filter';
 import {
   ALLOWED_ATTACHMENT_MIME_TYPES,
   MAX_ATTACHMENT_SIZE_BYTES,
   UPLOADS_DIR,
 } from '../common/uploads.constants';
-import { TicketsService } from './tickets.service';
+import { TicketActor, TicketsService } from './tickets.service';
+
+function toActor(user: AuthenticatedUser): TicketActor {
+  return { id: user.sub, role: user.role as RoleCode };
+}
 
 @Controller('tickets/:ticketId/attachments')
 export class TicketAttachmentsController {
@@ -41,7 +46,12 @@ export class TicketAttachmentsController {
       limits: { fileSize: MAX_ATTACHMENT_SIZE_BYTES },
       fileFilter: (_req, file, callback) => {
         if (!ALLOWED_ATTACHMENT_MIME_TYPES.includes(file.mimetype)) {
-          callback(new BadRequestException("Type de fichier non supporté (images ou PDF uniquement)."), false);
+          callback(
+            new BadRequestException(
+              'Type de fichier non supporté (images ou PDF uniquement).',
+            ),
+            false,
+          );
           return;
         }
         callback(null, true);
@@ -52,25 +62,30 @@ export class TicketAttachmentsController {
     @Param('ticketId', new ParseUUIDPipe()) ticketId: string,
     @UploadedFile() file: Express.Multer.File,
     @Body('commentId') commentId: string | undefined,
-    @Req() req: Request,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
     if (!file) {
       throw new BadRequestException('Aucun fichier fourni.');
     }
 
-    const userId = (req as Request & { user?: { sub: string } }).user?.sub;
-    if (!userId) {
-      throw new Error('Authenticated user required');
-    }
-
-    return this.ticketsService.addAttachment(ticketId, file, commentId, userId);
+    return this.ticketsService.addAttachment(
+      ticketId,
+      file,
+      commentId,
+      user.sub,
+    );
   }
 
   @Delete(':attachmentId')
   remove(
     @Param('ticketId', new ParseUUIDPipe()) ticketId: string,
     @Param('attachmentId', new ParseUUIDPipe()) attachmentId: string,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.ticketsService.removeAttachment(ticketId, attachmentId);
+    return this.ticketsService.removeAttachment(
+      ticketId,
+      attachmentId,
+      toActor(user),
+    );
   }
 }

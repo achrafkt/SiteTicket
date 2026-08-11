@@ -5,7 +5,8 @@ import { FormEvent, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Mail, Lock, Eye } from "lucide-react";
-import { storeUser } from "@/lib/current-user";
+import { getStoredUser, storeUser } from "@/lib/current-user";
+import { useTicketStore } from "@/store/ticket-store";
 import styles from "./login.module.css";
 
 type LoginResponse = {
@@ -60,6 +61,7 @@ export default function LoginPage() {
       const loginResponse = payload as LoginResponse;
       localStorage.setItem("site-ticket-token", loginResponse.accessToken);
       storeUser(loginResponse.user);
+      useTicketStore.getState().resetSession(getStoredUser());
       router.push("/helpdesk");
     } catch (submitError) {
       setError(

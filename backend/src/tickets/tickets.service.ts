@@ -2,14 +2,37 @@ import { basename, join } from 'path';
 import { unlink } from 'fs/promises';
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { RoleCode } from '@prisma/client';
 import { UPLOADS_DIR, UPLOADS_URL_PREFIX } from '../common/uploads.constants';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
+import {
+  TicketAuthorizationContext,
+  TicketsPermissionsService,
+} from './tickets-permissions.service';
+
+export interface TicketActor {
+  id: string;
+  role: RoleCode;
+}
+
+const MODIFIABLE_TICKET_FIELDS: Array<keyof UpdateTicketDto> = [
+  'title',
+  'description',
+  'priority',
+  'isBlocking',
+  'locationZone',
+  'trade',
+  'externalParty',
+  'dueDate',
+  'statusId',
+];
 
 const attachmentSelect = {
   id: true,
@@ -93,7 +116,10 @@ const ticketSelect = {
 
 @Injectable()
 export class TicketsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly permissions: TicketsPermissionsService,
+  ) {}
 
   findAll() {
     return this.prisma.ticket.findMany({
@@ -145,7 +171,12 @@ export class TicketsService {
               select: { id: true, code: true, name: true },
             },
             changed_by_user: {
-              select: { id: true, first_name: true, last_name: true, email: true },
+              select: {
+                id: true,
+                first_name: true,
+                last_name: true,
+                email: true,
+              },
             },
           },
         },
@@ -159,7 +190,14 @@ export class TicketsService {
     return ticket;
   }
 
-  async create(createTicketDto: CreateTicketDto, userId: string) {
+  async create(createTicketDto: CreateTicketDto, actor: TicketActor) {
+    if (!this.permissions.canCreateTicket(actor.role)) {
+      throw new ForbiddenException(
+        'Votre rôle ne permet pas de créer un ticket.',
+      );
+    }
+
+    const userId = actor.id;
     await this.ensureProjectExists(createTicketDto.projectId);
     await this.ensureTicketTypeExists(createTicketDto.ticketTypeId);
     await this.ensureUserExists(userId);
@@ -174,7 +212,7 @@ export class TicketsService {
     });
 
     if (!initialStatus) {
-      throw new BadRequestException('Le statut initial n\'est pas disponible.');
+      throw new BadRequestException("Le statut initial n'est pas disponible.");
     }
 
     const ticketNumber = await this.generateTicketNumber();
@@ -192,7 +230,9 @@ export class TicketsService {
         location_zone: createTicketDto.locationZone,
         trade: createTicketDto.trade,
         external_party: createTicketDto.externalParty,
-        due_date: createTicketDto.dueDate ? new Date(createTicketDto.dueDate) : undefined,
+        due_date: createTicketDto.dueDate
+          ? new Date(createTicketDto.dueDate)
+          : undefined,
         created_by: userId,
         assigned_to: createTicketDto.assignedTo,
       },
@@ -211,8 +251,36 @@ export class TicketsService {
     return ticket;
   }
 
-  async update(id: string, updateTicketDto: UpdateTicketDto, userId: string) {
-    await this.ensureTicketExists(id);
+  async update(
+    id: string,
+    updateTicketDto: UpdateTicketDto,
+    actor: TicketActor,
+  ) {
+    const userId = actor.id;
+    const ticket = await this.getAuthorizationContext(id);
+
+    const isAssigning = updateTicketDto.assignedTo !== undefined;
+    const isModifyingOtherFields = MODIFIABLE_TICKET_FIELDS.some(
+      (field) => updateTicketDto[field] !== undefined,
+    );
+
+    if (
+      isAssigning &&
+      !(await this.permissions.canAssignTicket(actor.role, actor.id, ticket))
+    ) {
+      throw new ForbiddenException(
+        "Votre rôle ne permet pas d'assigner ce ticket.",
+      );
+    }
+
+    if (
+      isModifyingOtherFields &&
+      !(await this.permissions.canModifyTicket(actor.role, actor.id, ticket))
+    ) {
+      throw new ForbiddenException(
+        'Votre rôle ne permet pas de modifier ce ticket.',
+      );
+    }
 
     if (updateTicketDto.statusId) {
       await this.ensureStatusExists(updateTicketDto.statusId);
@@ -220,15 +288,6 @@ export class TicketsService {
 
     if (updateTicketDto.assignedTo) {
       await this.ensureUserExists(updateTicketDto.assignedTo);
-    }
-
-    const currentTicket = await this.prisma.ticket.findUnique({
-      where: { id },
-      select: { status_id: true },
-    });
-
-    if (!currentTicket) {
-      throw new NotFoundException('Ticket introuvable.');
     }
 
     const updateData: Record<string, unknown> = {
@@ -239,7 +298,9 @@ export class TicketsService {
       location_zone: updateTicketDto.locationZone,
       trade: updateTicketDto.trade,
       external_party: updateTicketDto.externalParty,
-      due_date: updateTicketDto.dueDate ? new Date(updateTicketDto.dueDate) : undefined,
+      due_date: updateTicketDto.dueDate
+        ? new Date(updateTicketDto.dueDate)
+        : undefined,
       assigned_to: updateTicketDto.assignedTo,
       status_id: updateTicketDto.statusId,
     };
@@ -256,11 +317,14 @@ export class TicketsService {
       select: ticketSelect,
     });
 
-    if (updateTicketDto.statusId && updateTicketDto.statusId !== currentTicket.status_id) {
+    if (
+      updateTicketDto.statusId &&
+      updateTicketDto.statusId !== ticket.status_id
+    ) {
       await this.prisma.ticketStatusHistory.create({
         data: {
           ticket_id: id,
-          from_status_id: currentTicket.status_id,
+          from_status_id: ticket.status_id,
           to_status_id: updateTicketDto.statusId,
           changed_by: userId,
           comment: 'Statut mis à jour',
@@ -271,8 +335,16 @@ export class TicketsService {
     return updatedTicket;
   }
 
-  async remove(id: string) {
-    await this.ensureTicketExists(id);
+  async remove(id: string, actor: TicketActor) {
+    const ticket = await this.getAuthorizationContext(id);
+
+    if (
+      !(await this.permissions.canDeleteTicket(actor.role, actor.id, ticket))
+    ) {
+      throw new ForbiddenException(
+        'Votre rôle ne permet pas de supprimer ce ticket.',
+      );
+    }
 
     const attachments = await this.prisma.ticketAttachment.findMany({
       where: { ticket_id: id },
@@ -294,13 +366,23 @@ export class TicketsService {
     return { success: true };
   }
 
-  async addComment(ticketId: string, createCommentDto: CreateCommentDto, userId: string) {
+  async addComment(
+    ticketId: string,
+    createCommentDto: CreateCommentDto,
+    actor: TicketActor,
+  ) {
     await this.ensureTicketExists(ticketId);
+
+    if (!this.permissions.canCommentOnTicket(actor.role)) {
+      throw new ForbiddenException(
+        'Votre rôle ne permet pas de commenter ce ticket.',
+      );
+    }
 
     return this.prisma.ticketComment.create({
       data: {
         ticket_id: ticketId,
-        user_id: userId,
+        user_id: actor.id,
         comment_text: createCommentDto.commentText,
         is_internal: createCommentDto.isInternal ?? true,
       },
@@ -336,7 +418,9 @@ export class TicketsService {
       });
 
       if (!comment || comment.ticket_id !== ticketId) {
-        throw new BadRequestException("Le commentaire sélectionné est introuvable pour ce ticket.");
+        throw new BadRequestException(
+          'Le commentaire sélectionné est introuvable pour ce ticket.',
+        );
       }
     }
 
@@ -354,14 +438,26 @@ export class TicketsService {
     });
   }
 
-  async removeAttachment(ticketId: string, attachmentId: string) {
+  async removeAttachment(
+    ticketId: string,
+    attachmentId: string,
+    actor: TicketActor,
+  ) {
     const attachment = await this.prisma.ticketAttachment.findUnique({
       where: { id: attachmentId },
-      select: { id: true, ticket_id: true, file_url: true },
+      select: { id: true, ticket_id: true, file_url: true, uploaded_by: true },
     });
 
     if (!attachment || attachment.ticket_id !== ticketId) {
       throw new NotFoundException('Pièce jointe introuvable.');
+    }
+
+    if (
+      !this.permissions.canDeleteAttachment(actor.role, actor.id, attachment)
+    ) {
+      throw new ForbiddenException(
+        'Votre rôle ne permet pas de supprimer cette pièce jointe.',
+      );
     }
 
     await this.prisma.ticketAttachment.delete({ where: { id: attachmentId } });
@@ -411,7 +507,9 @@ export class TicketsService {
     });
 
     if (!user) {
-      throw new BadRequestException('L\'utilisateur sélectionné est introuvable.');
+      throw new BadRequestException(
+        "L'utilisateur sélectionné est introuvable.",
+      );
     }
   }
 
@@ -424,6 +522,27 @@ export class TicketsService {
     if (!ticket) {
       throw new NotFoundException('Ticket introuvable.');
     }
+  }
+
+  private async getAuthorizationContext(
+    id: string,
+  ): Promise<TicketAuthorizationContext> {
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id },
+      select: {
+        project_id: true,
+        created_by: true,
+        assigned_to: true,
+        status_id: true,
+        ticket_type: { select: { code: true } },
+      },
+    });
+
+    if (!ticket) {
+      throw new NotFoundException('Ticket introuvable.');
+    }
+
+    return ticket;
   }
 
   private async ensureStatusExists(statusId: string) {

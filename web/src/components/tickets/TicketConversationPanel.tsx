@@ -24,6 +24,7 @@ import {
 import { useTicketStore } from '@/store/ticket-store';
 import { useTicketCollaboration } from '@/hooks/useTicketCollaboration';
 import { ALLOWED_ATTACHMENT_MIME_TYPES, MAX_ATTACHMENT_SIZE_BYTES } from '@/lib/tickets-api';
+import { canDeleteAttachment } from '@/lib/ticket-permissions';
 import { Avatar } from './Avatar';
 import { AttachmentThumb } from './AttachmentThumb';
 import { formatDateTime } from './ticket-visuals';
@@ -57,6 +58,7 @@ const MACRO_VARIABLES = [
 ];
 
 function MessageItem({ message, ticketId }: { message: TicketMessage; ticketId: string }) {
+  const currentUser = useTicketStore((state) => state.currentUser);
   const deleteTicketAttachment = useTicketStore((state) => state.deleteTicketAttachment);
   const [collapsed, setCollapsed] = useState(false);
   const isLong = message.body.length > 220;
@@ -100,16 +102,23 @@ function MessageItem({ message, ticketId }: { message: TicketMessage; ticketId: 
 
       {!collapsed && message.attachments.length > 0 ? (
         <div className="mt-2.5 flex flex-wrap gap-2">
-          {message.attachments.map((attachment) => (
-            <AttachmentThumb
-              key={attachment.id}
-              fileName={attachment.fileName}
-              fileType={attachment.fileType}
-              fileSize={attachment.fileSize}
-              fileUrl={attachment.fileUrl}
-              onRemove={() => deleteTicketAttachment(ticketId, attachment.id)}
-            />
-          ))}
+          {message.attachments.map((attachment) => {
+            const canRemove = canDeleteAttachment(currentUser, attachment.uploadedBy.id);
+            return (
+              <AttachmentThumb
+                key={attachment.id}
+                fileName={attachment.fileName}
+                fileType={attachment.fileType}
+                fileSize={attachment.fileSize}
+                fileUrl={attachment.fileUrl}
+                onRemove={() => deleteTicketAttachment(ticketId, attachment.id)}
+                disabled={!canRemove}
+                disabledReason={
+                  canRemove ? undefined : 'Votre rôle ne permet pas de supprimer cette pièce jointe.'
+                }
+              />
+            );
+          })}
         </div>
       ) : null}
     </div>

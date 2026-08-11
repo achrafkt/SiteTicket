@@ -14,9 +14,18 @@ type DropdownProps = {
   options: DropdownOption[];
   onChange: (value: string) => void;
   className?: string;
+  disabled?: boolean;
+  title?: string;
 };
 
-export function Dropdown({ value, options, onChange, className = '' }: DropdownProps) {
+export function Dropdown({
+  value,
+  options,
+  onChange,
+  className = '',
+  disabled = false,
+  title,
+}: DropdownProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -33,14 +42,17 @@ export function Dropdown({ value, options, onChange, className = '' }: DropdownP
   }, []);
 
   return (
-    <div className={`relative ${className}`} ref={ref}>
+    <div className={`relative ${className}`} ref={ref} title={disabled ? title : undefined}>
       <button
         type="button"
+        disabled={disabled}
         onClick={() => setOpen((prev) => !prev)}
         className={`group flex w-full items-center gap-2 rounded-lg border bg-white pl-3 pr-2 py-2 text-left transition-all duration-150 ${
-          open
-            ? 'border-blue-500 ring-2 ring-blue-100'
-            : 'border-gray-200 hover:border-gray-300'
+          disabled
+            ? 'cursor-not-allowed border-gray-100 bg-gray-50 opacity-70'
+            : open
+              ? 'border-blue-500 ring-2 ring-blue-100'
+              : 'border-gray-200 hover:border-gray-300'
         }`}
       >
         {selected?.dotClassName ? (
