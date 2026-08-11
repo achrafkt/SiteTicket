@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { ChevronDown, ChevronRight, Plus, RefreshCw, X } from 'lucide-react';
 import { useTicketStore } from '@/store/ticket-store';
 import { getDueDateUrgency } from '@/lib/ticket-rules';
+import { canDeleteAttachment, getTicketPermissionGuard } from '@/lib/ticket-permissions';
 import { Avatar } from './Avatar';
 import { AttachmentThumb } from './AttachmentThumb';
 import { Dropdown } from './Dropdown';
@@ -61,12 +62,14 @@ export function TicketDetailsPanel({ ticket }: { ticket: Ticket }) {
   const toggleDetailsPanel = useTicketStore((state) => state.toggleDetailsPanel);
   const detailLoadingId = useTicketStore((state) => state.detailLoadingId);
   const detailError = useTicketStore((state) => state.detailError);
+  const ticketActionError = useTicketStore((state) => state.ticketActionError);
   const [tagDraft, setTagDraft] = useState('');
   const [isAddingTag, setIsAddingTag] = useState(false);
   const [tags, setTags] = useState(ticket.tags);
 
   const isDetailLoading = detailLoadingId === ticket.id;
   const isAssignedToMe = ticket.assignees.some((assignee) => assignee.id === currentUser?.id);
+  const permissionGuard = getTicketPermissionGuard(currentUser, ticket);
 
   function addTag() {
     const value = tagDraft.trim();
@@ -94,6 +97,8 @@ export function TicketDetailsPanel({ ticket }: { ticket: Ticket }) {
             label: status.name,
             dotClassName: STATUS_DOT_CLASSES[status.code as keyof typeof STATUS_DOT_CLASSES],
           }))}
+          disabled={!permissionGuard.canModify}
+          title={permissionGuard.modifyReason}
         />
         <button
           type="button"
@@ -103,6 +108,10 @@ export function TicketDetailsPanel({ ticket }: { ticket: Ticket }) {
           <X size={16} />
         </button>
       </div>
+
+      {ticketActionError ? (
+        <p className="border-b border-red-100 bg-red-50 px-4 py-2 text-xs text-red-600">{ticketActionError}</p>
+      ) : null}
 
       <div className="space-y-6 p-4">
         <div>
@@ -115,6 +124,8 @@ export function TicketDetailsPanel({ ticket }: { ticket: Ticket }) {
               label: TICKET_PRIORITY_LABELS[code],
               dotClassName: PRIORITY_DOT_CLASSES[code],
             }))}
+            disabled={!permissionGuard.canModify}
+            title={permissionGuard.modifyReason}
           />
         </div>
 
@@ -129,7 +140,13 @@ export function TicketDetailsPanel({ ticket }: { ticket: Ticket }) {
               <button
                 type="button"
                 onClick={() => assignTicketToCurrentUser(ticket.id)}
-                className="shrink-0 whitespace-nowrap text-[11px] font-medium text-blue-600 hover:underline"
+                disabled={!permissionGuard.canAssign}
+                title={permissionGuard.assignReason}
+                className={`shrink-0 whitespace-nowrap text-[11px] font-medium ${
+                  permissionGuard.canAssign
+                    ? 'text-blue-600 hover:underline'
+                    : 'cursor-not-allowed text-gray-300'
+                }`}
               >
                 Assigner à moi
               </button>
@@ -281,16 +298,23 @@ export function TicketDetailsPanel({ ticket }: { ticket: Ticket }) {
             <p className="text-xs text-gray-400">Aucune pièce jointe.</p>
           ) : (
             <div className="flex flex-wrap gap-2">
-              {ticket.attachments.map((attachment) => (
-                <AttachmentThumb
-                  key={attachment.id}
-                  fileName={attachment.fileName}
-                  fileType={attachment.fileType}
-                  fileSize={attachment.fileSize}
-                  fileUrl={attachment.fileUrl}
-                  onRemove={() => deleteTicketAttachment(ticket.id, attachment.id)}
-                />
-              ))}
+              {ticket.attachments.map((attachment) => {
+                const canRemove = canDeleteAttachment(currentUser, attachment.uploadedBy.id);
+                return (
+                  <AttachmentThumb
+                    key={attachment.id}
+                    fileName={attachment.fileName}
+                    fileType={attachment.fileType}
+                    fileSize={attachment.fileSize}
+                    fileUrl={attachment.fileUrl}
+                    onRemove={() => deleteTicketAttachment(ticket.id, attachment.id)}
+                    disabled={!canRemove}
+                    disabledReason={
+                      canRemove ? undefined : 'Votre rôle ne permet pas de supprimer cette pièce jointe.'
+                    }
+                  />
+                );
+              })}
             </div>
           )}
         </CollapsibleSection>

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import Image from "next/image";
 import { Search, ChevronDown, HelpCircle, Bell, Plus } from "lucide-react";
 import {
@@ -32,7 +33,9 @@ export function AppHeader() {
   const router = useRouter();
   const currentUser = useTicketStore((state) => state.currentUser);
   const types = useTicketStore((state) => state.types);
-  const openCreateTicketPanel = useTicketStore((state) => state.openCreateTicketPanel);
+  const openCreateTicketPanel = useTicketStore(
+    (state) => state.openCreateTicketPanel,
+  );
   const [isCreateMenuOpen, setCreateMenuOpen] = useState(false);
   const [isUserMenuOpen, setUserMenuOpen] = useState(false);
   const [globalSearch, setGlobalSearch] = useState("");
@@ -41,12 +44,14 @@ export function AppHeader() {
   const userRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
 
   function handleLogout() {
     localStorage.removeItem("site-ticket-token");
     clearStoredUser();
+    useTicketStore.getState().resetSession(null);
     setUserMenuOpen(false);
     router.push("/login");
   }
@@ -68,26 +73,29 @@ export function AppHeader() {
   }, []);
 
   const displayUser = mounted ? currentUser : null;
+  const isAdmin = displayUser?.roleCode === "admin";
 
   return (
     <header className="relative z-30 flex h-16 shrink-0 items-center gap-3  bg-nav-bg pr-4 text-white shadow-[0_10px_28px_rgba(8,26,77,0.32)]">
-      <div className="flex w-16 shrink-0 items-center justify-center">
-        <div className="flex w-16 shrink-0 items-center justify-center">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/95 p-1.5 shadow-[0_4px_12px_rgba(0,0,0,0.15)]">
-            <Image
-              src="/logo/logo-icon.png"
-              alt="SiteTicket"
-              width={36}
-              height={36}
-              className="h-full w-full object-contain"
-              priority
-            />
-          </div>
+      <Link
+        href="/helpdesk"
+        title="Retour à l'accueil"
+        className="flex shrink-0 items-center gap-2.5 pl-2 transition-opacity hover:opacity-90"
+      >
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/95 p-1.5 shadow-[0_4px_12px_rgba(0,0,0,0.15)]">
+          <Image
+            src="/logo/logo-icon.png"
+            alt="SiteTicket"
+            width={36}
+            height={36}
+            className="h-full w-full object-contain"
+            priority
+          />
         </div>
-      </div>
-      <span className="-ml-2 shrink-0 text-sm font-semibold tracking-[0.08em] text-white/95">
-        SiteTicket
-      </span>
+        <span className="shrink-0 text-sm font-semibold tracking-[0.08em] text-white/95">
+          SiteTicket
+        </span>
+      </Link>
 
       <div className="flex flex-1 justify-center px-4">
         <div className="flex w-full max-w-2xl items-center gap-3 rounded-md bg-white/12 px-4 py-2.5 text-base text-slate-100 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.16)] backdrop-blur-sm transition-all duration-200 focus-within:bg-white/18 focus-within:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.28)]">
@@ -167,10 +175,10 @@ export function AppHeader() {
             onClick={() => setUserMenuOpen((value) => !value)}
             title={displayUser?.name ?? undefined}
             className={`flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold text-white shadow-[0_6px_14px_rgba(2,6,23,0.35)] ${initialsAvatarColor(
-              displayUser?.initials ?? '?',
+              displayUser?.initials ?? "?",
             )}`}
           >
-            {displayUser?.initials ?? '?'}
+            {displayUser?.initials ?? "?"}
           </button>
           {isUserMenuOpen ? (
             <div className="absolute right-0 top-full z-20 mt-2 w-52 rounded-xl border border-slate-200 bg-white py-1.5 text-gray-700 shadow-[0_18px_36px_rgba(15,23,42,0.16)]">
@@ -183,12 +191,33 @@ export function AppHeader() {
               >
                 Profil
               </button>
-              <button
-                type="button"
-                className="block w-full px-3.5 py-2 text-left text-xs font-medium hover:bg-slate-50"
-              >
-                Paramètres
-              </button>
+              {isAdmin ? (
+                <>
+                  <p className="border-t border-gray-100 px-3.5 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                    Paramètres
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      router.push("/settings/users");
+                    }}
+                    className="block w-full px-3.5 py-2 text-left text-xs font-medium hover:bg-slate-50"
+                  >
+                    Utilisateurs
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      router.push("/settings/projects");
+                    }}
+                    className="block w-full px-3.5 py-2 text-left text-xs font-medium hover:bg-slate-50"
+                  >
+                    Chantiers
+                  </button>
+                </>
+              ) : null}
               <button
                 type="button"
                 onClick={handleLogout}

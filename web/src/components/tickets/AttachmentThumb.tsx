@@ -10,9 +10,18 @@ type AttachmentThumbProps = {
   fileUrl?: string;
   onRemove?: () => void;
   disabled?: boolean;
+  disabledReason?: string;
 };
 
-export function AttachmentThumb({ fileName, fileType, fileSize, fileUrl, onRemove, disabled }: AttachmentThumbProps) {
+export function AttachmentThumb({
+  fileName,
+  fileType,
+  fileSize,
+  fileUrl,
+  onRemove,
+  disabled,
+  disabledReason,
+}: AttachmentThumbProps) {
   const isImage = fileType?.startsWith('image/') ?? false;
 
   const content = (
@@ -49,7 +58,7 @@ export function AttachmentThumb({ fileName, fileType, fileSize, fileUrl, onRemov
           type="button"
           onClick={onRemove}
           disabled={disabled}
-          title="Retirer"
+          title={disabled ? (disabledReason ?? 'Retirer') : 'Retirer'}
           className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-gray-500 text-white hover:bg-gray-700 disabled:opacity-50"
         >
           <X size={10} />

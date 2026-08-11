@@ -1,8 +1,10 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma, RoleCode } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -80,11 +82,40 @@ export class UsersService {
     });
   }
 
-  async update(id: string, updateUserDto: UpdateUserDto) {
-    await this.ensureUserExists(id);
+  async update(id: string, updateUserDto: UpdateUserDto, actorId: string) {
+    const targetUser = await this.getUserGuardInfo(id);
 
+    let nextRoleCode: RoleCode | undefined;
     if (updateUserDto.roleId) {
-      await this.ensureRoleExists(updateUserDto.roleId);
+      const role = await this.ensureRoleExists(updateUserDto.roleId);
+      nextRoleCode = role.code;
+    }
+
+    const isCurrentlyAdmin = targetUser.role.code === RoleCode.admin;
+    const isDemotingFromAdmin =
+      isCurrentlyAdmin && nextRoleCode !== undefined && nextRoleCode !== RoleCode.admin;
+    const isDeactivating = updateUserDto.isActive === false && targetUser.is_active;
+
+    if (id === actorId && (isDemotingFromAdmin || isDeactivating)) {
+      throw new ForbiddenException(
+        'Vous ne pouvez pas modifier votre propre rôle administrateur ni désactiver votre propre compte.',
+      );
+    }
+
+    if (isCurrentlyAdmin && targetUser.is_active && (isDemotingFromAdmin || isDeactivating)) {
+      const otherActiveAdmins = await this.prisma.user.count({
+        where: {
+          role: { code: RoleCode.admin },
+          is_active: true,
+          id: { not: id },
+        },
+      });
+
+      if (otherActiveAdmins === 0) {
+        throw new ForbiddenException(
+          'Impossible de rétrograder ou désactiver le dernier administrateur actif du système.',
+        );
+      }
     }
 
     if (updateUserDto.email) {
@@ -118,9 +149,40 @@ export class UsersService {
     });
   }
 
-  async remove(id: string) {
-    await this.ensureUserExists(id);
-    await this.prisma.user.delete({ where: { id } });
+  async remove(id: string, actorId: string) {
+    const targetUser = await this.getUserGuardInfo(id);
+
+    if (id === actorId) {
+      throw new ForbiddenException('Vous ne pouvez pas supprimer votre propre compte.');
+    }
+
+    const isCurrentlyAdmin = targetUser.role.code === RoleCode.admin;
+    if (isCurrentlyAdmin && targetUser.is_active) {
+      const otherActiveAdmins = await this.prisma.user.count({
+        where: {
+          role: { code: RoleCode.admin },
+          is_active: true,
+          id: { not: id },
+        },
+      });
+
+      if (otherActiveAdmins === 0) {
+        throw new ForbiddenException(
+          'Impossible de supprimer le dernier administrateur actif du système.',
+        );
+      }
+    }
+
+    try {
+      await this.prisma.user.delete({ where: { id } });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2003') {
+        throw new BadRequestException(
+          'Impossible de supprimer cet utilisateur : il est référencé par des tickets, commentaires ou pièces jointes existants. Désactivez-le plutôt.',
+        );
+      }
+      throw err;
+    }
 
     return { success: true };
   }
@@ -128,22 +190,30 @@ export class UsersService {
   private async ensureRoleExists(roleId: string) {
     const role = await this.prisma.role.findUnique({
       where: { id: roleId },
-      select: { id: true },
+      select: { id: true, code: true },
     });
 
     if (!role) {
       throw new BadRequestException('Le rôle sélectionné est introuvable.');
     }
+
+    return role;
   }
 
-  private async ensureUserExists(id: string) {
+  private async getUserGuardInfo(id: string) {
     const user = await this.prisma.user.findUnique({
       where: { id },
-      select: { id: true },
+      select: {
+        id: true,
+        is_active: true,
+        role: { select: { code: true } },
+      },
     });
 
     if (!user) {
       throw new NotFoundException('Utilisateur introuvable.');
     }
+
+    return user;
   }
 }

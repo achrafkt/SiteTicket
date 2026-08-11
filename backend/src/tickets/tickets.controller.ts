@@ -7,13 +7,18 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
-  Req,
 } from '@nestjs/common';
-import type { Request } from 'express';
+import { RoleCode } from '@prisma/client';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
-import { TicketsService } from './tickets.service';
+import { TicketActor, TicketsService } from './tickets.service';
+
+function toActor(user: AuthenticatedUser): TicketActor {
+  return { id: user.sub, role: user.role as RoleCode };
+}
 
 @Controller('tickets')
 export class TicketsController {
@@ -30,42 +35,36 @@ export class TicketsController {
   }
 
   @Post()
-  create(@Body() createTicketDto: CreateTicketDto, @Req() req: Request) {
-    const userId = (req as Request & { user?: { sub: string } }).user?.sub;
-    if (!userId) {
-      throw new Error('Authenticated user required');
-    }
-    return this.ticketsService.create(createTicketDto, userId);
+  create(
+    @Body() createTicketDto: CreateTicketDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.ticketsService.create(createTicketDto, toActor(user));
   }
 
   @Patch(':id')
   update(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() updateTicketDto: UpdateTicketDto,
-    @Req() req: Request,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    const userId = (req as Request & { user?: { sub: string } }).user?.sub;
-    if (!userId) {
-      throw new Error('Authenticated user required');
-    }
-    return this.ticketsService.update(id, updateTicketDto, userId);
+    return this.ticketsService.update(id, updateTicketDto, toActor(user));
   }
 
   @Delete(':id')
-  remove(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.ticketsService.remove(id);
+  remove(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.ticketsService.remove(id, toActor(user));
   }
 
   @Post(':id/comments')
   addComment(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() createCommentDto: CreateCommentDto,
-    @Req() req: Request,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    const userId = (req as Request & { user?: { sub: string } }).user?.sub;
-    if (!userId) {
-      throw new Error('Authenticated user required');
-    }
-    return this.ticketsService.addComment(id, createCommentDto, userId);
+    return this.ticketsService.addComment(id, createCommentDto, toActor(user));
   }
 }
