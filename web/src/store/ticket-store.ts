@@ -1,13 +1,14 @@
 import { create } from 'zustand';
 import { ApiError } from '@/lib/api';
 import { getStoredUser } from '@/lib/current-user';
-import { mapAttachment, mapComment, mapProject, mapStatus, mapTicket, mapType } from '@/lib/ticket-mapper';
+import { mapAttachment, mapComment, mapPerson, mapProject, mapStatus, mapTicket, mapType } from '@/lib/ticket-mapper';
 import { isTicketOverdue } from '@/lib/ticket-rules';
 import {
   createComment,
   createTicket as createTicketRequest,
   deleteAttachment,
   deleteTicket as deleteTicketRequest,
+  getAssignableUsers,
   getProjects,
   getTicket,
   getTicketStatuses,
@@ -43,6 +44,7 @@ type TicketStoreState = {
   statuses: TicketStatus[];
   types: TicketType[];
   projects: Project[];
+  users: Person[];
   currentUser: Person | null;
   activeView: ViewKey;
   activeTicketId: string | null;
@@ -70,7 +72,7 @@ type TicketStoreState = {
   setSearchTerm: (term: string) => void;
   updateTicketStatus: (id: string, statusId: string) => Promise<void>;
   updateTicketPriority: (id: string, priority: TicketPriority) => Promise<void>;
-  assignTicketToCurrentUser: (id: string) => Promise<void>;
+  assignTicketToUser: (id: string, userId: string | null) => Promise<void>;
   toggleKnowledgePanel: (open?: boolean) => void;
   toggleDetailsPanel: (open?: boolean) => void;
   addComment: (ticketId: string, body: string, isInternal: boolean) => Promise<TicketMessage | null>;
@@ -127,6 +129,7 @@ function sessionInitialState(user: Person | null) {
     statuses: [] as TicketStatus[],
     types: [] as TicketType[],
     projects: [] as Project[],
+    users: [] as Person[],
     currentUser: user,
     activeView: 'all_tickets' as ViewKey,
     activeTicketId: null,
@@ -192,11 +195,12 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
     loadInitialData: async () => {
       set({ isLoading: true, error: null });
       try {
-        const [apiTickets, apiStatuses, apiTypes, apiProjects] = await Promise.all([
+        const [apiTickets, apiStatuses, apiTypes, apiProjects, apiUsers] = await Promise.all([
           getTickets(),
           getTicketStatuses(),
           getTicketTypes(),
           getProjects(),
+          getAssignableUsers(),
         ]);
         const tickets = apiTickets.map(mapTicket);
         set({
@@ -204,6 +208,7 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
           statuses: apiStatuses.map(mapStatus),
           types: apiTypes.map(mapType),
           projects: apiProjects.map(mapProject),
+          users: apiUsers.map(mapPerson),
           isLoading: false,
         });
         get().setActiveTicketId(tickets[0]?.id ?? null);
@@ -275,20 +280,20 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
       }
     },
 
-    assignTicketToCurrentUser: async (id) => {
-      const currentUser = get().currentUser;
-      if (!currentUser) return;
+    assignTicketToUser: async (id, userId) => {
+      const assignee = userId ? get().users.find((user) => user.id === userId) ?? null : null;
+      if (userId && !assignee) return;
 
       const previous = get().tickets;
       set((state) => ({
         tickets: state.tickets.map((ticket) =>
-          ticket.id === id ? { ...ticket, assignees: [currentUser] } : ticket,
+          ticket.id === id ? { ...ticket, assignees: assignee ? [assignee] : [] } : ticket,
         ),
         ticketActionError: null,
       }));
 
       try {
-        await updateTicket(id, { assignedTo: currentUser.id });
+        await updateTicket(id, { assignedTo: userId });
       } catch (err) {
         set({
           tickets: previous,

@@ -10,7 +10,8 @@ import { AttachmentThumb } from './AttachmentThumb';
 import { Dropdown } from './Dropdown';
 import {
   DUE_DATE_TEXT_CLASSES,
-  PRIORITY_DOT_CLASSES,
+  PRIORITY_ICONS,
+  PRIORITY_ICON_CLASSES,
   REPORTER_ROLE_BADGE_CLASSES,
   STATUS_DOT_CLASSES,
   formatShortDate,
@@ -54,10 +55,11 @@ function CollapsibleSection({
 
 export function TicketDetailsPanel({ ticket }: { ticket: Ticket }) {
   const statuses = useTicketStore((state) => state.statuses);
+  const users = useTicketStore((state) => state.users);
   const currentUser = useTicketStore((state) => state.currentUser);
   const updateTicketStatus = useTicketStore((state) => state.updateTicketStatus);
   const updateTicketPriority = useTicketStore((state) => state.updateTicketPriority);
-  const assignTicketToCurrentUser = useTicketStore((state) => state.assignTicketToCurrentUser);
+  const assignTicketToUser = useTicketStore((state) => state.assignTicketToUser);
   const deleteTicketAttachment = useTicketStore((state) => state.deleteTicketAttachment);
   const toggleDetailsPanel = useTicketStore((state) => state.toggleDetailsPanel);
   const detailLoadingId = useTicketStore((state) => state.detailLoadingId);
@@ -70,6 +72,7 @@ export function TicketDetailsPanel({ ticket }: { ticket: Ticket }) {
   const isDetailLoading = detailLoadingId === ticket.id;
   const isAssignedToMe = ticket.assignees.some((assignee) => assignee.id === currentUser?.id);
   const permissionGuard = getTicketPermissionGuard(currentUser, ticket);
+  const canSelfAssign = Boolean(currentUser) && users.some((user) => user.id === currentUser?.id);
 
   function addTag() {
     const value = tagDraft.trim();
@@ -122,7 +125,8 @@ export function TicketDetailsPanel({ ticket }: { ticket: Ticket }) {
             options={(Object.keys(TICKET_PRIORITY_LABELS) as TicketPriority[]).map((code) => ({
               value: code,
               label: TICKET_PRIORITY_LABELS[code],
-              dotClassName: PRIORITY_DOT_CLASSES[code],
+              icon: PRIORITY_ICONS[code],
+              iconClassName: PRIORITY_ICON_CLASSES[code],
             }))}
             disabled={!permissionGuard.canModify}
             title={permissionGuard.modifyReason}
@@ -132,14 +136,10 @@ export function TicketDetailsPanel({ ticket }: { ticket: Ticket }) {
         <div>
           <div className="mb-2 flex items-center justify-between gap-2">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Assigné à</p>
-            {isAssignedToMe ? (
-              <span className="shrink-0 whitespace-nowrap text-[11px] font-medium text-gray-300">
-                Assigné à moi
-              </span>
-            ) : (
+            {canSelfAssign && !isAssignedToMe ? (
               <button
                 type="button"
-                onClick={() => assignTicketToCurrentUser(ticket.id)}
+                onClick={() => assignTicketToUser(ticket.id, currentUser!.id)}
                 disabled={!permissionGuard.canAssign}
                 title={permissionGuard.assignReason}
                 className={`shrink-0 whitespace-nowrap text-[11px] font-medium ${
@@ -150,20 +150,23 @@ export function TicketDetailsPanel({ ticket }: { ticket: Ticket }) {
               >
                 Assigner à moi
               </button>
-            )}
+            ) : null}
           </div>
-          {ticket.assignees.length > 0 ? (
-            <div className="flex flex-col gap-2">
-              {ticket.assignees.map((assignee) => (
-                <div key={assignee.name} className="flex items-center gap-2">
-                  <Avatar initials={assignee.initials} />
-                  <span className="text-sm text-gray-700">{assignee.name}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-gray-400">Non assigné</p>
-          )}
+          <Dropdown
+            value={ticket.assignees[0]?.id ?? ''}
+            onChange={(userId) => assignTicketToUser(ticket.id, userId || null)}
+            placeholder="Non assigné"
+            options={[
+              { value: '', label: 'Non assigné' },
+              ...users.map((user) => ({
+                value: user.id,
+                label: user.id === currentUser?.id ? `${user.name} (moi)` : user.name,
+                initials: user.initials,
+              })),
+            ]}
+            disabled={!permissionGuard.canAssign}
+            title={permissionGuard.assignReason}
+          />
         </div>
 
         <div>

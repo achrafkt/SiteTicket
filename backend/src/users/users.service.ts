@@ -41,6 +41,27 @@ export class UsersService {
     });
   }
 
+  /**
+   * Users that a ticket can be assigned to. Observateur is a read-only role
+   * (see seed data), so it is excluded, along with deactivated accounts.
+   */
+  findAssignable() {
+    return this.prisma.user.findMany({
+      where: {
+        is_active: true,
+        role: { code: { not: RoleCode.observateur } },
+      },
+      orderBy: [{ first_name: 'asc' }, { last_name: 'asc' }],
+      select: {
+        id: true,
+        first_name: true,
+        last_name: true,
+        email: true,
+        role: { select: { code: true, name: true } },
+      },
+    });
+  }
+
   async findOne(id: string) {
     const user = await this.prisma.user.findUnique({
       where: { id },
@@ -93,8 +114,11 @@ export class UsersService {
 
     const isCurrentlyAdmin = targetUser.role.code === RoleCode.admin;
     const isDemotingFromAdmin =
-      isCurrentlyAdmin && nextRoleCode !== undefined && nextRoleCode !== RoleCode.admin;
-    const isDeactivating = updateUserDto.isActive === false && targetUser.is_active;
+      isCurrentlyAdmin &&
+      nextRoleCode !== undefined &&
+      nextRoleCode !== RoleCode.admin;
+    const isDeactivating =
+      updateUserDto.isActive === false && targetUser.is_active;
 
     if (id === actorId && (isDemotingFromAdmin || isDeactivating)) {
       throw new ForbiddenException(
@@ -102,7 +126,11 @@ export class UsersService {
       );
     }
 
-    if (isCurrentlyAdmin && targetUser.is_active && (isDemotingFromAdmin || isDeactivating)) {
+    if (
+      isCurrentlyAdmin &&
+      targetUser.is_active &&
+      (isDemotingFromAdmin || isDeactivating)
+    ) {
       const otherActiveAdmins = await this.prisma.user.count({
         where: {
           role: { code: RoleCode.admin },
@@ -128,7 +156,9 @@ export class UsersService {
       });
 
       if (existingUser) {
-        throw new BadRequestException('Cette adresse e-mail est déjà utilisée.');
+        throw new BadRequestException(
+          'Cette adresse e-mail est déjà utilisée.',
+        );
       }
     }
 
@@ -153,7 +183,9 @@ export class UsersService {
     const targetUser = await this.getUserGuardInfo(id);
 
     if (id === actorId) {
-      throw new ForbiddenException('Vous ne pouvez pas supprimer votre propre compte.');
+      throw new ForbiddenException(
+        'Vous ne pouvez pas supprimer votre propre compte.',
+      );
     }
 
     const isCurrentlyAdmin = targetUser.role.code === RoleCode.admin;
@@ -176,7 +208,10 @@ export class UsersService {
     try {
       await this.prisma.user.delete({ where: { id } });
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2003') {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2003'
+      ) {
         throw new BadRequestException(
           'Impossible de supprimer cet utilisateur : il est référencé par des tickets, commentaires ou pièces jointes existants. Désactivez-le plutôt.',
         );

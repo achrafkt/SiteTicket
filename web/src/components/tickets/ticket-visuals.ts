@@ -1,3 +1,5 @@
+import type { ElementType } from 'react';
+import { ChevronDown, ChevronsUp, ChevronUp, Minus } from 'lucide-react';
 import type { TicketPriority, TicketStatusCode } from '@/types/ticket';
 import type { DueDateUrgency } from '@/lib/ticket-rules';
 
@@ -28,11 +30,18 @@ export const STATUS_DOT_CLASSES: Record<TicketStatusCode, string> = {
   REOPENED: 'bg-status-blocked',
 };
 
-export const PRIORITY_DOT_CLASSES: Record<TicketPriority, string> = {
-  low: 'bg-priority-low',
-  medium: 'bg-priority-medium',
-  high: 'bg-priority-high',
-  critical: 'bg-priority-urgent',
+export const PRIORITY_ICONS: Record<TicketPriority, ElementType> = {
+  critical: ChevronsUp,
+  high: ChevronUp,
+  medium: Minus,
+  low: ChevronDown,
+};
+
+export const PRIORITY_ICON_CLASSES: Record<TicketPriority, string> = {
+  critical: 'text-red-600',
+  high: 'text-orange-500',
+  medium: 'text-amber-500',
+  low: 'text-green-600',
 };
 
 export const REPORTER_ROLE_BADGE_CLASSES: Record<string, string> = {
