@@ -39,6 +39,15 @@ export type ViewKey =
   | 'rfi_waiting_moe'
   | 'overdue_by_lot';
 
+export const VIEWS_SIDEBAR_DEFAULT_WIDTH = 256;
+export const VIEWS_SIDEBAR_COLLAPSED_WIDTH = 64;
+export const VIEWS_SIDEBAR_COLLAPSE_THRESHOLD = 160;
+export const VIEWS_SIDEBAR_MAX_WIDTH = 360;
+
+export function getEffectiveViewsSidebarWidth(width: number): number {
+  return width <= VIEWS_SIDEBAR_COLLAPSE_THRESHOLD ? VIEWS_SIDEBAR_COLLAPSED_WIDTH : width;
+}
+
 type TicketStoreState = {
   tickets: Ticket[];
   statuses: TicketStatus[];
@@ -51,6 +60,7 @@ type TicketStoreState = {
   searchTerm: string;
   isKnowledgePanelOpen: boolean;
   isDetailsPanelOpen: boolean;
+  viewsSidebarWidth: number;
   isLoading: boolean;
   error: string | null;
   ticketActionError: string | null;
@@ -75,6 +85,7 @@ type TicketStoreState = {
   assignTicketToUser: (id: string, userId: string | null) => Promise<void>;
   toggleKnowledgePanel: (open?: boolean) => void;
   toggleDetailsPanel: (open?: boolean) => void;
+  setViewsSidebarWidth: (width: number) => void;
   addComment: (ticketId: string, body: string, isInternal: boolean) => Promise<TicketMessage | null>;
   openCreateTicketPanel: (typeId: string) => void;
   closeCreateTicketPanel: () => void;
@@ -136,6 +147,7 @@ function sessionInitialState(user: Person | null) {
     searchTerm: '',
     isKnowledgePanelOpen: false,
     isDetailsPanelOpen: true,
+    viewsSidebarWidth: VIEWS_SIDEBAR_DEFAULT_WIDTH,
     isLoading: false,
     error: null,
     ticketActionError: null,
@@ -307,6 +319,14 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
 
     toggleDetailsPanel: (open) =>
       set((state) => ({ isDetailsPanelOpen: open ?? !state.isDetailsPanelOpen })),
+
+    setViewsSidebarWidth: (width) =>
+      set({
+        viewsSidebarWidth: Math.min(
+          VIEWS_SIDEBAR_MAX_WIDTH,
+          Math.max(VIEWS_SIDEBAR_COLLAPSED_WIDTH, width),
+        ),
+      }),
 
     addComment: async (ticketId, body, isInternal) => {
       set({ isSubmittingComment: true, commentError: null });

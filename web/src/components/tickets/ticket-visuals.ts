@@ -1,5 +1,17 @@
 import type { ElementType } from 'react';
-import { ChevronDown, ChevronsUp, ChevronUp, Minus } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronsUp,
+  ChevronUp,
+  Minus,
+  Circle,
+  Check,
+  Loader2,
+  Clock,
+  CheckCircle2,
+  Lock,
+  Undo2,
+} from 'lucide-react';
 import type { TicketPriority, TicketStatusCode } from '@/types/ticket';
 import type { DueDateUrgency } from '@/lib/ticket-rules';
 
@@ -30,6 +42,36 @@ export const STATUS_DOT_CLASSES: Record<TicketStatusCode, string> = {
   REOPENED: 'bg-status-blocked',
 };
 
+export const STATUS_ICONS: Record<TicketStatusCode, ElementType> = {
+  NEW: Circle,
+  ASSIGNED: Check,
+  IN_PROGRESS: Loader2,
+  PENDING: Clock,
+  RESOLVED: CheckCircle2,
+  CLOSED: Lock,
+  REOPENED: Undo2,
+};
+
+export const STATUS_ICON_CLASSES: Record<TicketStatusCode, string> = {
+  NEW: 'text-status-todo',
+  ASSIGNED: 'text-status-todo',
+  IN_PROGRESS: 'text-status-in-progress',
+  PENDING: 'text-status-waiting',
+  RESOLVED: 'text-status-done',
+  CLOSED: 'text-status-done',
+  REOPENED: 'text-status-blocked',
+};
+
+export const STATUS_DESCRIPTIONS: Record<TicketStatusCode, string> = {
+  NEW: 'Ticket créé, pas encore pris en charge.',
+  ASSIGNED: 'Un responsable a été désigné, intervention à venir.',
+  IN_PROGRESS: 'Le travail est en cours sur le terrain.',
+  PENDING: "En attente d'une information, d'une validation ou d'un tiers.",
+  RESOLVED: 'Problème traité, en attente de confirmation.',
+  CLOSED: 'Clôturé, aucune action supplémentaire requise.',
+  REOPENED: 'Rouvert après un retour ou un problème persistant.',
+};
+
 export const PRIORITY_ICONS: Record<TicketPriority, ElementType> = {
   critical: ChevronsUp,
   high: ChevronUp,
@@ -42,6 +84,13 @@ export const PRIORITY_ICON_CLASSES: Record<TicketPriority, string> = {
   high: 'text-orange-500',
   medium: 'text-amber-500',
   low: 'text-green-600',
+};
+
+export const PRIORITY_ICON_BG_CLASSES: Record<TicketPriority, string> = {
+  critical: 'bg-red-50',
+  high: 'bg-orange-50',
+  medium: 'bg-amber-50',
+  low: 'bg-green-50',
 };
 
 export const REPORTER_ROLE_BADGE_CLASSES: Record<string, string> = {

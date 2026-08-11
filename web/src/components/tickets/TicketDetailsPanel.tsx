@@ -12,8 +12,12 @@ import {
   DUE_DATE_TEXT_CLASSES,
   PRIORITY_ICONS,
   PRIORITY_ICON_CLASSES,
+  PRIORITY_ICON_BG_CLASSES,
   REPORTER_ROLE_BADGE_CLASSES,
   STATUS_DOT_CLASSES,
+  STATUS_ICONS,
+  STATUS_ICON_CLASSES,
+  STATUS_DESCRIPTIONS,
   formatShortDate,
 } from './ticket-visuals';
 import { TICKET_PRIORITY_LABELS, type Ticket, type TicketPriority } from '@/types/ticket';
@@ -98,7 +102,9 @@ export function TicketDetailsPanel({ ticket }: { ticket: Ticket }) {
           options={statuses.map((status) => ({
             value: status.id,
             label: status.name,
-            dotClassName: STATUS_DOT_CLASSES[status.code as keyof typeof STATUS_DOT_CLASSES],
+            description: STATUS_DESCRIPTIONS[status.code as keyof typeof STATUS_DESCRIPTIONS],
+            icon: STATUS_ICONS[status.code as keyof typeof STATUS_ICONS],
+            iconClassName: STATUS_ICON_CLASSES[status.code as keyof typeof STATUS_ICON_CLASSES],
           }))}
           disabled={!permissionGuard.canModify}
           title={permissionGuard.modifyReason}
@@ -127,6 +133,7 @@ export function TicketDetailsPanel({ ticket }: { ticket: Ticket }) {
               label: TICKET_PRIORITY_LABELS[code],
               icon: PRIORITY_ICONS[code],
               iconClassName: PRIORITY_ICON_CLASSES[code],
+              iconBgClassName: PRIORITY_ICON_BG_CLASSES[code],
             }))}
             disabled={!permissionGuard.canModify}
             title={permissionGuard.modifyReason}

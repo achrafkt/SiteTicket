@@ -76,7 +76,7 @@ export function AppHeader() {
   const isAdmin = displayUser?.roleCode === "admin";
 
   return (
-    <header className="relative z-30 flex h-16 shrink-0 items-center gap-3  bg-nav-bg pr-4 text-white shadow-[0_10px_28px_rgba(8,26,77,0.32)]">
+    <header className="relative z-30 flex h-16 shrink-0 items-center gap-3  bg-nav-bg pr-4 text-white">
       <Link
         href="/helpdesk"
         title="Retour à l'accueil"

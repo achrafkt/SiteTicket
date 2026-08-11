@@ -7,10 +7,14 @@ import { Avatar } from './Avatar';
 export type DropdownOption = {
   value: string;
   label: string;
+  description?: string;
   dotClassName?: string;
   initials?: string;
   icon?: React.ElementType;
   iconClassName?: string;
+  iconBgClassName?: string;
+  disabled?: boolean;
+  disabledReason?: string;
 };
 
 type DropdownProps = {
@@ -26,6 +30,15 @@ type DropdownProps = {
 function OptionIndicator({ option }: { option: DropdownOption }) {
   if (option.icon) {
     const Icon = option.icon;
+    if (option.iconBgClassName) {
+      return (
+        <span
+          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${option.iconBgClassName}`}
+        >
+          <Icon size={13} className={option.iconClassName ?? 'text-gray-500'} strokeWidth={2.5} />
+        </span>
+      );
+    }
     return <Icon size={15} className={`shrink-0 ${option.iconClassName ?? 'text-gray-400'}`} strokeWidth={2.5} />;
   }
   if (option.initials) {
@@ -93,17 +106,34 @@ export function Dropdown({
               <button
                 key={option.value}
                 type="button"
+                disabled={option.disabled}
+                title={option.disabled ? option.disabledReason : undefined}
                 onClick={() => {
                   onChange(option.value);
                   setOpen(false);
                 }}
-                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors ${
-                  isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'
+                className={`flex w-full items-start gap-2 px-3 py-2 text-left text-sm transition-colors ${
+                  option.disabled
+                    ? 'cursor-not-allowed opacity-50'
+                    : isActive
+                      ? 'bg-blue-50 text-blue-700'
+                      : 'text-gray-700 hover:bg-gray-50'
                 }`}
               >
-                <OptionIndicator option={option} />
-                <span className="min-w-0 flex-1 truncate font-medium">{option.label}</span>
-                {isActive ? <Check size={14} className="shrink-0 text-blue-600" /> : null}
+                <span className="mt-0.5">
+                  <OptionIndicator option={option} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2">
+                    <span className="min-w-0 flex-1 truncate font-medium">{option.label}</span>
+                    {isActive ? <Check size={14} className="shrink-0 text-blue-600" /> : null}
+                  </span>
+                  {option.description ? (
+                    <span className="mt-0.5 block truncate text-xs font-normal text-gray-400">
+                      {option.description}
+                    </span>
+                  ) : null}
+                </span>
               </button>
             );
           })}

@@ -2,8 +2,15 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Search, SlidersHorizontal, ChevronDown, Check } from 'lucide-react';
-import { filterTicketsByView, useTicketStore } from '@/store/ticket-store';
+import {
+  filterTicketsByView,
+  useTicketStore,
+  getEffectiveViewsSidebarWidth,
+  VIEWS_SIDEBAR_DEFAULT_WIDTH,
+} from '@/store/ticket-store';
 import { TicketCard } from './TicketCard';
+
+const BASE_LIST_WIDTH = 336;
 
 const VIEW_TITLES: Record<string, string> = {
   my_tickets: 'Mes tickets',
@@ -34,6 +41,9 @@ export function TicketList() {
   const searchTerm = useTicketStore((state) => state.searchTerm);
   const setSearchTerm = useTicketStore((state) => state.setSearchTerm);
   const currentUserId = useTicketStore((state) => state.currentUser?.id ?? null);
+  const viewsSidebarWidth = useTicketStore((state) => state.viewsSidebarWidth);
+  const listWidth =
+    BASE_LIST_WIDTH + (VIEWS_SIDEBAR_DEFAULT_WIDTH - getEffectiveViewsSidebarWidth(viewsSidebarWidth));
 
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [sortBy, setSortBy] = useState<SortKey>('recent');
@@ -92,7 +102,10 @@ export function TicketList() {
   }
 
   return (
-    <section className="flex h-full w-84 shrink-0 flex-col border-r border-gray-100 bg-white">
+    <section
+      style={{ width: listWidth }}
+      className="flex h-full shrink-0 flex-col border-r border-gray-100 bg-white"
+    >
       <div className="border-b border-gray-100 p-3.5">
         <div className="flex items-center justify-between">
           <button
