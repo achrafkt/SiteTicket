@@ -25,13 +25,16 @@ export class TicketsController {
   constructor(private readonly ticketsService: TicketsService) {}
 
   @Get()
-  findAll() {
-    return this.ticketsService.findAll();
+  findAll(@CurrentUser() user: AuthenticatedUser) {
+    return this.ticketsService.findAll(toActor(user));
   }
 
   @Get(':id')
-  findOne(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.ticketsService.findOne(id);
+  findOne(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.ticketsService.findOne(id, toActor(user));
   }
 
   @Post()

@@ -1,4 +1,5 @@
 import { API_URL } from './api';
+import { stripHtmlToText, truncateText } from './html-text';
 import type {
   ApiAttachment,
   ApiComment,
@@ -98,6 +99,28 @@ export function mapType(type: ApiTicketType): TicketType {
 }
 
 export function mapTicket(apiTicket: ApiTicket): Ticket {
+  // `comments` on the list endpoint holds only the latest visible comment
+  // (take: 1, desc); on the detail endpoint it holds the full thread in
+  // chronological (asc) order. Either way its last element is the most
+  // recent comment the current user is allowed to see.
+  const lastComment =
+    apiTicket.comments && apiTicket.comments.length > 0
+      ? apiTicket.comments[apiTicket.comments.length - 1]
+      : null;
+
+  const lastActivityAt =
+    lastComment && new Date(lastComment.created_at).getTime() > new Date(apiTicket.updated_at).getTime()
+      ? lastComment.created_at
+      : apiTicket.updated_at;
+
+  const lastActivityPreview = lastComment
+    ? truncateText(stripHtmlToText(lastComment.comment_text), 100)
+    : null;
+
+  const lastActivityAuthor = lastComment
+    ? `${lastComment.user.first_name} ${lastComment.user.last_name}`
+    : null;
+
   return {
     id: apiTicket.id,
     reference: apiTicket.ticket_number,
@@ -118,6 +141,9 @@ export function mapTicket(apiTicket: ApiTicket): Ticket {
     reporter: mapPerson(apiTicket.created_by_user),
     dueDate: apiTicket.due_date,
     createdAt: apiTicket.created_at,
+    lastActivityAt,
+    lastActivityPreview,
+    lastActivityAuthor,
     tags: [],
     watchersCount: 0,
     messages: (apiTicket.comments ?? []).map(mapComment),

@@ -27,6 +27,10 @@ export class TicketsPermissionsService {
     return TICKET_PERMISSIONS[role].canComment;
   }
 
+  canViewInternalComments(role: RoleCode): boolean {
+    return TICKET_PERMISSIONS[role].canViewInternalComments;
+  }
+
   canModifyTicket(
     role: RoleCode,
     userId: string,

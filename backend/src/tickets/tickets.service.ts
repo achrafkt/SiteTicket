@@ -7,6 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { RoleCode } from '@prisma/client';
+import { sanitizeCommentHtml } from '../common/sanitize-comment-html';
 import { UPLOADS_DIR, UPLOADS_URL_PREFIX } from '../common/uploads.constants';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
@@ -121,19 +122,53 @@ export class TicketsService {
     private readonly permissions: TicketsPermissionsService,
   ) {}
 
-  findAll() {
+  findAll(actor: TicketActor) {
+    const canViewInternalComments = this.permissions.canViewInternalComments(
+      actor.role,
+    );
+
     return this.prisma.ticket.findMany({
       orderBy: [{ created_at: 'desc' }],
-      select: ticketSelect,
+      select: {
+        ...ticketSelect,
+        // Only the latest visible comment is needed here, to power the
+        // "last activity" preview/sort in the ticket list — the full
+        // conversation is fetched separately by findOne when a ticket is
+        // opened.
+        comments: {
+          where: canViewInternalComments ? undefined : { is_internal: false },
+          orderBy: [{ created_at: 'desc' }],
+          take: 1,
+          select: {
+            id: true,
+            comment_text: true,
+            is_internal: true,
+            created_at: true,
+            user: {
+              select: {
+                id: true,
+                first_name: true,
+                last_name: true,
+                email: true,
+              },
+            },
+          },
+        },
+      },
     });
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, actor: TicketActor) {
+    const canViewInternalComments = this.permissions.canViewInternalComments(
+      actor.role,
+    );
+
     const ticket = await this.prisma.ticket.findUnique({
       where: { id },
       select: {
         ...ticketSelect,
         comments: {
+          where: canViewInternalComments ? undefined : { is_internal: false },
           orderBy: [{ created_at: 'asc' }],
           select: {
             id: true,
@@ -379,12 +414,18 @@ export class TicketsService {
       );
     }
 
+    // External roles can never post internal/private comments, regardless of
+    // what the client sends — the server is the source of truth here.
+    const isInternal = this.permissions.canViewInternalComments(actor.role)
+      ? (createCommentDto.isInternal ?? true)
+      : false;
+
     return this.prisma.ticketComment.create({
       data: {
         ticket_id: ticketId,
         user_id: actor.id,
-        comment_text: createCommentDto.commentText,
-        is_internal: createCommentDto.isInternal ?? true,
+        comment_text: sanitizeCommentHtml(createCommentDto.commentText),
+        is_internal: isInternal,
       },
       select: {
         id: true,

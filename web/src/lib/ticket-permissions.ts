@@ -18,17 +18,18 @@ interface TicketRolePermissions {
   modify: TicketPermissionScope;
   assign: TicketPermissionScope;
   delete: TicketPermissionScope;
+  canViewInternalComments: boolean;
 }
 
 const TICKET_PERMISSIONS: Record<string, TicketRolePermissions> = {
-  admin: { modify: 'all', assign: 'all', delete: 'all' },
-  moa: { modify: 'own_ticket', assign: 'none', delete: 'own_ticket' },
-  moe: { modify: 'project_member', assign: 'project_member', delete: 'own_ticket' },
-  conducteur_travaux: { modify: 'all', assign: 'all', delete: 'own_ticket' },
-  chef_chantier: { modify: 'project_member', assign: 'project_member', delete: 'own_ticket' },
-  sous_traitant: { modify: 'assigned_ticket', assign: 'none', delete: 'none' },
-  qse: { modify: 'ticket_type_safety', assign: 'none', delete: 'own_ticket' },
-  observateur: { modify: 'none', assign: 'none', delete: 'own_ticket' },
+  admin: { modify: 'all', assign: 'all', delete: 'all', canViewInternalComments: true },
+  moa: { modify: 'own_ticket', assign: 'none', delete: 'own_ticket', canViewInternalComments: false },
+  moe: { modify: 'project_member', assign: 'project_member', delete: 'own_ticket', canViewInternalComments: true },
+  conducteur_travaux: { modify: 'all', assign: 'all', delete: 'own_ticket', canViewInternalComments: true },
+  chef_chantier: { modify: 'project_member', assign: 'project_member', delete: 'own_ticket', canViewInternalComments: true },
+  sous_traitant: { modify: 'assigned_ticket', assign: 'none', delete: 'none', canViewInternalComments: false },
+  qse: { modify: 'ticket_type_safety', assign: 'none', delete: 'own_ticket', canViewInternalComments: true },
+  observateur: { modify: 'none', assign: 'none', delete: 'own_ticket', canViewInternalComments: false },
 };
 
 const QSE_RESTRICTED_TICKET_TYPE = 'SAFETY';
@@ -79,6 +80,18 @@ export function getTicketPermissionGuard(
     modifyReason: canModify ? undefined : 'Votre rôle ne permet pas de modifier ce ticket.',
     assignReason: canAssign ? undefined : "Votre rôle ne permet pas d'assigner ce ticket.",
   };
+}
+
+// Whether the current user's role may see/post internal ("private") ticket
+// comments — mirrors backend TicketsPermissionsService.canViewInternalComments.
+// The backend re-checks and is the source of truth; this only drives the UI
+// (hiding the "Commentaire privé" tab) to avoid a confusing dead control.
+export function canViewInternalComments(currentUser: Person | null): boolean {
+  if (!currentUser?.roleCode) {
+    return true;
+  }
+
+  return TICKET_PERMISSIONS[currentUser.roleCode]?.canViewInternalComments ?? true;
 }
 
 // Attachments aren't their own resource in the role matrix, so the ticket
