@@ -24,13 +24,47 @@ import {
 import { useTicketStore } from '@/store/ticket-store';
 import { useTicketCollaboration } from '@/hooks/useTicketCollaboration';
 import { ALLOWED_ATTACHMENT_MIME_TYPES, MAX_ATTACHMENT_SIZE_BYTES } from '@/lib/tickets-api';
-import { canDeleteAttachment } from '@/lib/ticket-permissions';
+import { canDeleteAttachment, canViewInternalComments } from '@/lib/ticket-permissions';
+import { looksLikeRichTextHtml, stripHtmlToText } from '@/lib/html-text';
+import { sanitizeCommentHtmlForRender } from '@/lib/sanitize-comment-html';
 import { Avatar } from './Avatar';
 import { AttachmentThumb } from './AttachmentThumb';
 import { formatDateTime } from './ticket-visuals';
 import type { Ticket, TicketMessage } from '@/types/ticket';
 
 type ReplyTab = 'public' | 'private';
+type ToolbarMenu = 'template' | 'macro' | 'link' | null;
+
+const MAX_INLINE_IMAGE_SIZE_BYTES = 2 * 1024 * 1024;
+const ALLOWED_INLINE_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function isComposerEmpty(html: string): boolean {
+  const hasImage = /<img[\s>]/i.test(html);
+  if (hasImage) return false;
+  return stripHtmlToText(html).length === 0;
+}
+
+function normalizeLinkUrl(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  const withScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    const parsed = new URL(withScheme);
+    if (!['http:', 'https:', 'mailto:'].includes(parsed.protocol)) return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
 
 const REPLY_TEMPLATES = [
   {
@@ -57,17 +91,26 @@ const MACRO_VARIABLES = [
   { id: 'var-4', label: 'Numéro de ticket', token: '{{numero_ticket}}' },
 ];
 
-function MessageItem({ message, ticketId }: { message: TicketMessage; ticketId: string }) {
+function MessageItem({
+  message,
+  ticketId,
+  isJustSent,
+}: {
+  message: TicketMessage;
+  ticketId: string;
+  isJustSent: boolean;
+}) {
   const currentUser = useTicketStore((state) => state.currentUser);
   const deleteTicketAttachment = useTicketStore((state) => state.deleteTicketAttachment);
   const [collapsed, setCollapsed] = useState(false);
-  const isLong = message.body.length > 220;
+  const isLong = stripHtmlToText(message.body).length > 220;
+  const isRichHtml = looksLikeRichTextHtml(message.body);
 
   return (
     <div
-      className={`rounded-lg border p-3 ${
+      className={`rounded-lg border p-3 transition-shadow duration-1000 ${
         message.isInternal ? 'border-amber-200 bg-amber-50' : 'border-gray-100 bg-white'
-      }`}
+      } ${isJustSent ? 'ring-2 ring-blue-400 ring-offset-1' : 'ring-0 ring-transparent'}`}
     >
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-2">
@@ -97,7 +140,14 @@ function MessageItem({ message, ticketId }: { message: TicketMessage; ticketId: 
       ) : null}
 
       {!collapsed ? (
-        <p className="mt-2 whitespace-pre-wrap text-sm text-gray-700">{message.body}</p>
+        isRichHtml ? (
+          <div
+            className="rich-message-body mt-2 whitespace-pre-wrap text-sm text-gray-700"
+            dangerouslySetInnerHTML={{ __html: sanitizeCommentHtmlForRender(message.body) }}
+          />
+        ) : (
+          <p className="mt-2 whitespace-pre-wrap text-sm text-gray-700">{message.body}</p>
+        )
       ) : null}
 
       {!collapsed && message.attachments.length > 0 ? (
@@ -136,27 +186,55 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
   const toggleDetailsPanel = useTicketStore((state) => state.toggleDetailsPanel);
   const isDetailsPanelOpen = useTicketStore((state) => state.isDetailsPanelOpen);
 
+  const canSeeInternalComments = canViewInternalComments(currentUser);
+
   const [tab, setTab] = useState<ReplyTab>('public');
   const [body, setBody] = useState('');
   const [addToKnowledge, setAddToKnowledge] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
-  const [openMenu, setOpenMenu] = useState<'template' | 'macro' | null>(null);
+  const [openMenu, setOpenMenu] = useState<ToolbarMenu>(null);
+  const [linkUrl, setLinkUrl] = useState('');
+  const [linkError, setLinkError] = useState<string | null>(null);
   const [isActionsMenuOpen, setActionsMenuOpen] = useState(false);
   const [isDeletingTicket, setIsDeletingTicket] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
   const [isUploadingFiles, setIsUploadingFiles] = useState(false);
+  const [activeFormats, setActiveFormats] = useState({ bold: false, italic: false, underline: false });
+  const [justSentCommentId, setJustSentCommentId] = useState<string | null>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const actionsMenuRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
+  const savedRangeRef = useRef<Range | null>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const previousVisibleStateRef = useRef<{ ticketId: string; count: number }>({
+    ticketId: ticket.id,
+    count: 0,
+  });
 
   const { activeEditor, announceEditing, takeControl, simulateRemoteEditor } = useTicketCollaboration(
     ticket.id,
     { id: currentUser?.id ?? '', name: currentUser?.name ?? '' },
   );
 
+  function updateActiveFormats() {
+    const selection = window.getSelection();
+    const anchorNode = selection?.anchorNode ?? null;
+    if (!anchorNode || !editorRef.current?.contains(anchorNode)) {
+      setActiveFormats({ bold: false, italic: false, underline: false });
+      return;
+    }
+    setActiveFormats({
+      bold: document.queryCommandState('bold'),
+      italic: document.queryCommandState('italic'),
+      underline: document.queryCommandState('underline'),
+    });
+  }
+
   useEffect(() => {
-    if (!body.trim()) return;
+    if (isComposerEmpty(body)) return;
     announceEditing();
     const timeout = setTimeout(() => setDraftSavedAt(new Date().toISOString()), 800);
     return () => clearTimeout(timeout);
@@ -167,6 +245,35 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
     () => activeEditor !== null && activeEditor.userId !== currentUser?.id,
     [activeEditor, currentUser?.id],
   );
+
+  const visibleMessages = useMemo(
+    () => ticket.messages.filter((message) => canSeeInternalComments || !message.isInternal),
+    [ticket.messages, canSeeInternalComments],
+  );
+
+  useEffect(() => {
+    const previous = previousVisibleStateRef.current;
+    const sameTicket = previous.ticketId === ticket.id;
+    const grew = visibleMessages.length > previous.count;
+    if (sameTicket && grew) {
+      messagesScrollRef.current?.scrollTo({
+        top: messagesScrollRef.current.scrollHeight,
+        behavior: 'smooth',
+      });
+    }
+    previousVisibleStateRef.current = { ticketId: ticket.id, count: visibleMessages.length };
+  }, [ticket.id, visibleMessages.length]);
+
+  useEffect(() => {
+    if (!justSentCommentId) return;
+    const timeout = setTimeout(() => setJustSentCommentId(null), 1200);
+    return () => clearTimeout(timeout);
+  }, [justSentCommentId]);
+
+  useEffect(() => {
+    document.addEventListener('selectionchange', updateActiveFormats);
+    return () => document.removeEventListener('selectionchange', updateActiveFormats);
+  }, []);
 
   useEffect(() => {
     if (!openMenu) return;
@@ -202,14 +309,127 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
     setIsDeletingTicket(false);
   }
 
+  function syncBodyFromEditor() {
+    setBody(editorRef.current?.innerHTML ?? '');
+  }
+
+  function saveSelection() {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+    if (editorRef.current?.contains(range.commonAncestorContainer)) {
+      savedRangeRef.current = range.cloneRange();
+    }
+  }
+
+  function restoreSelection() {
+    const selection = window.getSelection();
+    if (!selection || !editorRef.current) return;
+
+    selection.removeAllRanges();
+    if (savedRangeRef.current) {
+      selection.addRange(savedRangeRef.current);
+    } else {
+      const range = document.createRange();
+      range.selectNodeContents(editorRef.current);
+      range.collapse(false);
+      selection.addRange(range);
+    }
+  }
+
+  function insertHtmlAtCursor(html: string) {
+    editorRef.current?.focus();
+    restoreSelection();
+    document.execCommand('insertHTML', false, html);
+    syncBodyFromEditor();
+  }
+
+  function handleFormatMouseDown(event: React.MouseEvent, command: 'bold' | 'italic' | 'underline') {
+    event.preventDefault();
+    document.execCommand(command);
+    syncBodyFromEditor();
+    updateActiveFormats();
+  }
+
+  function handleToolbarMenuMouseDown(event: React.MouseEvent) {
+    event.preventDefault();
+    saveSelection();
+  }
+
+  function handleEditorKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      handleSend();
+    }
+  }
+
+  function handleEditorPaste(event: React.ClipboardEvent<HTMLDivElement>) {
+    event.preventDefault();
+    const text = event.clipboardData.getData('text/plain');
+    document.execCommand('insertText', false, text);
+    syncBodyFromEditor();
+  }
+
   function insertTemplate(templateBody: string) {
-    setBody((current) => (current.trim() ? `${current}\n\n${templateBody}` : templateBody));
+    insertHtmlAtCursor(escapeHtml(templateBody).replace(/\n/g, '<br>'));
     setOpenMenu(null);
   }
 
   function insertVariable(token: string) {
-    setBody((current) => `${current}${token}`);
+    insertHtmlAtCursor(escapeHtml(token));
     setOpenMenu(null);
+  }
+
+  function handleInsertLink() {
+    const url = normalizeLinkUrl(linkUrl);
+    if (!url) {
+      setLinkError('URL invalide. Utilisez http(s):// ou mailto:.');
+      return;
+    }
+
+    editorRef.current?.focus();
+    restoreSelection();
+    const selection = window.getSelection();
+    if (selection && !selection.isCollapsed) {
+      document.execCommand('createLink', false, url);
+    } else {
+      document.execCommand(
+        'insertHTML',
+        false,
+        `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>`,
+      );
+    }
+    syncBodyFromEditor();
+    setOpenMenu(null);
+    setLinkUrl('');
+    setLinkError(null);
+  }
+
+  function handleInlineImageSelected(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) return;
+    const file = fileList[0];
+
+    if (!ALLOWED_INLINE_IMAGE_MIME_TYPES.includes(file.type)) {
+      setFileError('Types acceptés pour une image insérée : JPEG, PNG, WebP.');
+      if (imageInputRef.current) imageInputRef.current.value = '';
+      return;
+    }
+    if (file.size > MAX_INLINE_IMAGE_SIZE_BYTES) {
+      setFileError('Taille maximale pour une image insérée : 2 Mo.');
+      if (imageInputRef.current) imageInputRef.current.value = '';
+      return;
+    }
+
+    setFileError(null);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = typeof reader.result === 'string' ? reader.result : null;
+      if (dataUrl) {
+        insertHtmlAtCursor(`<img src="${dataUrl}" alt="${escapeHtml(file.name)}" style="max-width:100%;height:auto" />`);
+      }
+    };
+    reader.readAsDataURL(file);
+    if (imageInputRef.current) imageInputRef.current.value = '';
   }
 
   function handleFilesSelected(fileList: FileList | null) {
@@ -238,11 +458,13 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
   }
 
   async function handleSend() {
-    if (!body.trim() || isSubmittingComment) return;
+    if (isComposerEmpty(body) || isSubmittingComment) return;
 
-    const comment = await addComment(ticket.id, body, tab === 'private');
+    const comment = await addComment(ticket.id, body, canSeeInternalComments && tab === 'private');
 
     if (comment) {
+      setJustSentCommentId(comment.id);
+
       if (pendingFiles.length > 0) {
         setIsUploadingFiles(true);
         for (const file of pendingFiles) {
@@ -252,6 +474,7 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
         setPendingFiles([]);
       }
 
+      if (editorRef.current) editorRef.current.innerHTML = '';
       setBody('');
       setDraftSavedAt(null);
 
@@ -310,9 +533,14 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
         </div>
       </header>
 
-      <div className="helpdesk-scroll flex-1 space-y-3 overflow-y-auto px-5 py-4">
-        {ticket.messages.map((message) => (
-          <MessageItem key={message.id} message={message} ticketId={ticket.id} />
+      <div ref={messagesScrollRef} className="helpdesk-scroll flex-1 space-y-3 overflow-y-auto px-5 py-4">
+        {visibleMessages.map((message) => (
+          <MessageItem
+            key={message.id}
+            message={message}
+            ticketId={ticket.id}
+            isJustSent={message.id === justSentCommentId}
+          />
         ))}
       </div>
 
@@ -339,15 +567,17 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
             >
               Réponse publique
             </button>
-            <button
-              type="button"
-              onClick={() => setTab('private')}
-              className={`rounded px-3 py-1.5 ${
-                tab === 'private' ? 'bg-amber-100 text-amber-800' : 'text-gray-500'
-              }`}
-            >
-              Commentaire privé
-            </button>
+            {canSeeInternalComments ? (
+              <button
+                type="button"
+                onClick={() => setTab('private')}
+                className={`rounded px-3 py-1.5 ${
+                  tab === 'private' ? 'bg-amber-100 text-amber-800' : 'text-gray-500'
+                }`}
+              >
+                Commentaire privé
+              </button>
+            ) : null}
           </div>
 
           {draftSavedAt ? (
@@ -370,21 +600,115 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
 
         <div className={`rounded-lg border ${tab === 'private' ? 'border-amber-200 bg-amber-50' : 'border-gray-200 bg-white'}`}>
           <div className="flex items-center gap-1 border-b border-gray-100 px-2 py-1.5 text-gray-400" ref={toolbarRef}>
-            <button type="button" className="rounded p-1 hover:bg-gray-100" title="Gras">
+            <button
+              type="button"
+              onMouseDown={(event) => handleFormatMouseDown(event, 'bold')}
+              aria-pressed={activeFormats.bold}
+              className={`rounded p-1 hover:bg-gray-100 ${
+                activeFormats.bold ? 'bg-blue-100 text-blue-700' : ''
+              }`}
+              title="Gras"
+            >
               <Bold size={14} />
             </button>
-            <button type="button" className="rounded p-1 hover:bg-gray-100" title="Italique">
+            <button
+              type="button"
+              onMouseDown={(event) => handleFormatMouseDown(event, 'italic')}
+              aria-pressed={activeFormats.italic}
+              className={`rounded p-1 hover:bg-gray-100 ${
+                activeFormats.italic ? 'bg-blue-100 text-blue-700' : ''
+              }`}
+              title="Italique"
+            >
               <Italic size={14} />
             </button>
-            <button type="button" className="rounded p-1 hover:bg-gray-100" title="Souligné">
+            <button
+              type="button"
+              onMouseDown={(event) => handleFormatMouseDown(event, 'underline')}
+              aria-pressed={activeFormats.underline}
+              className={`rounded p-1 hover:bg-gray-100 ${
+                activeFormats.underline ? 'bg-blue-100 text-blue-700' : ''
+              }`}
+              title="Souligné"
+            >
               <Underline size={14} />
             </button>
-            <button type="button" className="rounded p-1 hover:bg-gray-100" title="Lien">
-              <LinkIcon size={14} />
-            </button>
-            <button type="button" className="rounded p-1 hover:bg-gray-100" title="Image">
+
+            <div className="relative">
+              <button
+                type="button"
+                onMouseDown={handleToolbarMenuMouseDown}
+                onClick={() => setOpenMenu((current) => (current === 'link' ? null : 'link'))}
+                className={`rounded p-1 hover:bg-gray-100 ${openMenu === 'link' ? 'bg-gray-100 text-gray-700' : ''}`}
+                title="Lien"
+              >
+                <LinkIcon size={14} />
+              </button>
+              {openMenu === 'link' ? (
+                <div className="absolute left-0 top-full z-10 mt-1 w-64 rounded-md border border-gray-200 bg-white p-2 shadow-lg">
+                  <label className="mb-1 block text-[11px] font-medium text-gray-500">URL du lien</label>
+                  <input
+                    type="text"
+                    value={linkUrl}
+                    autoFocus
+                    onChange={(event) => {
+                      setLinkUrl(event.target.value);
+                      setLinkError(null);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        handleInsertLink();
+                      }
+                    }}
+                    placeholder="https://exemple.com"
+                    className="w-full rounded border border-gray-200 px-2 py-1 text-xs focus:border-blue-400 focus:outline-none"
+                  />
+                  {linkError ? <p className="mt-1 text-[11px] text-red-600">{linkError}</p> : null}
+                  <div className="mt-2 flex justify-end gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpenMenu(null);
+                        setLinkUrl('');
+                        setLinkError(null);
+                      }}
+                      className="rounded px-2 py-1 text-[11px] text-gray-500 hover:bg-gray-50"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleInsertLink}
+                      className="rounded bg-blue-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-blue-700"
+                    >
+                      Insérer
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(event) => handleInlineImageSelected(event.target.files)}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onMouseDown={(event) => {
+                event.preventDefault();
+                saveSelection();
+              }}
+              onClick={() => imageInputRef.current?.click()}
+              className="rounded p-1 hover:bg-gray-100"
+              title="Insérer une image dans le texte"
+            >
               <ImageIcon size={14} />
             </button>
+
             <input
               ref={fileInputRef}
               type="file"
@@ -407,6 +731,7 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
             <div className="relative">
               <button
                 type="button"
+                onMouseDown={handleToolbarMenuMouseDown}
                 onClick={() => setOpenMenu((current) => (current === 'template' ? null : 'template'))}
                 className={`rounded p-1 hover:bg-gray-100 ${openMenu === 'template' ? 'bg-gray-100 text-gray-700' : ''}`}
                 title="Insérer un modèle de réponse"
@@ -432,6 +757,7 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
             <div className="relative">
               <button
                 type="button"
+                onMouseDown={handleToolbarMenuMouseDown}
                 onClick={() => setOpenMenu((current) => (current === 'macro' ? null : 'macro'))}
                 className={`rounded p-1 hover:bg-gray-100 ${openMenu === 'macro' ? 'bg-gray-100 text-gray-700' : ''}`}
                 title="Insérer une macro / variable"
@@ -473,15 +799,26 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
             </div>
           ) : null}
 
-          <textarea
-            value={body}
-            onChange={(event) => setBody(event.target.value)}
-            disabled={isBlockedByOtherEditor}
-            rows={3}
-            placeholder={
-              tab === 'public' ? 'Ajouter une réponse...' : 'Ajouter une note interne...'
-            }
-            className="w-full resize-none px-3 py-2 text-sm focus:outline-none disabled:bg-gray-50 disabled:text-gray-400"
+          <div
+            ref={editorRef}
+            contentEditable={!isBlockedByOtherEditor}
+            suppressContentEditableWarning
+            role="textbox"
+            aria-multiline="true"
+            data-placeholder={tab === 'public' ? 'Ajouter une réponse...' : 'Ajouter une note interne...'}
+            onInput={syncBodyFromEditor}
+            onKeyDown={handleEditorKeyDown}
+            onKeyUp={updateActiveFormats}
+            onPaste={handleEditorPaste}
+            onMouseUp={updateActiveFormats}
+            onFocus={() => {
+              saveSelection();
+              updateActiveFormats();
+            }}
+            onBlur={saveSelection}
+            className={`rich-editor min-h-[72px] w-full px-3 py-2 text-sm focus:outline-none ${
+              isBlockedByOtherEditor ? 'pointer-events-none bg-gray-50 text-gray-400' : ''
+            }`}
           />
 
           <div className="flex items-center justify-between border-t border-gray-100 px-3 py-2">
@@ -498,7 +835,7 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
             <button
               type="button"
               onClick={handleSend}
-              disabled={!body.trim() || isBlockedByOtherEditor || isSubmittingComment || isUploadingFiles}
+              disabled={isComposerEmpty(body) || isBlockedByOtherEditor || isSubmittingComment || isUploadingFiles}
               className="flex h-8 w-8 items-center justify-center rounded-md bg-blue-600 text-white disabled:bg-gray-200 disabled:text-gray-400"
               title="Envoyer"
             >

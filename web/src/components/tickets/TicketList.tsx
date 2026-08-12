@@ -84,7 +84,7 @@ export function TicketList() {
         return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
       });
     } else {
-      sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      sorted.sort((a, b) => new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime());
     }
     return sorted;
   }, [tickets, activeView, searchTerm, sortBy, currentUserId]);

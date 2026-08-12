@@ -20,6 +20,10 @@ export type TicketPermissionScope =
 export interface TicketRolePermissions {
   canCreate: boolean;
   canComment: boolean;
+  // Whether this role can see/post internal ("private") comments. External
+  // roles (MOA, sous-traitant, observateur) are restricted to public
+  // comments only — see is_internal filtering in TicketsService.findOne.
+  canViewInternalComments: boolean;
   modify: TicketPermissionScope;
   assign: TicketPermissionScope;
   delete: TicketPermissionScope;
@@ -32,6 +36,7 @@ export const TICKET_PERMISSIONS: Record<RoleCode, TicketRolePermissions> = {
   [RoleCode.admin]: {
     canCreate: true,
     canComment: true,
+    canViewInternalComments: true,
     modify: 'all',
     assign: 'all',
     delete: 'all',
@@ -39,6 +44,7 @@ export const TICKET_PERMISSIONS: Record<RoleCode, TicketRolePermissions> = {
   [RoleCode.moa]: {
     canCreate: true,
     canComment: true,
+    canViewInternalComments: false,
     modify: 'own_ticket',
     assign: 'none',
     delete: 'own_ticket',
@@ -46,6 +52,7 @@ export const TICKET_PERMISSIONS: Record<RoleCode, TicketRolePermissions> = {
   [RoleCode.moe]: {
     canCreate: true,
     canComment: true,
+    canViewInternalComments: true,
     modify: 'project_member',
     assign: 'project_member',
     delete: 'own_ticket',
@@ -53,6 +60,7 @@ export const TICKET_PERMISSIONS: Record<RoleCode, TicketRolePermissions> = {
   [RoleCode.conducteur_travaux]: {
     canCreate: true,
     canComment: true,
+    canViewInternalComments: true,
     modify: 'all',
     assign: 'all',
     delete: 'own_ticket',
@@ -60,6 +68,7 @@ export const TICKET_PERMISSIONS: Record<RoleCode, TicketRolePermissions> = {
   [RoleCode.chef_chantier]: {
     canCreate: true,
     canComment: true,
+    canViewInternalComments: true,
     modify: 'project_member',
     assign: 'project_member',
     delete: 'own_ticket',
@@ -67,6 +76,7 @@ export const TICKET_PERMISSIONS: Record<RoleCode, TicketRolePermissions> = {
   [RoleCode.sous_traitant]: {
     canCreate: true,
     canComment: true,
+    canViewInternalComments: false,
     modify: 'assigned_ticket',
     assign: 'none',
     delete: 'none',
@@ -74,6 +84,7 @@ export const TICKET_PERMISSIONS: Record<RoleCode, TicketRolePermissions> = {
   [RoleCode.qse]: {
     canCreate: true,
     canComment: true,
+    canViewInternalComments: true,
     modify: 'ticket_type_safety',
     assign: 'none',
     delete: 'own_ticket',
@@ -81,6 +92,7 @@ export const TICKET_PERMISSIONS: Record<RoleCode, TicketRolePermissions> = {
   [RoleCode.observateur]: {
     canCreate: false,
     canComment: true,
+    canViewInternalComments: false,
     modify: 'none',
     assign: 'none',
     delete: 'own_ticket',

@@ -41,10 +41,22 @@ export function TicketCard({ ticket, isSelected, isChecked, onSelect, onToggleCh
         <p className="min-w-0 truncate text-sm font-semibold leading-5 text-slate-950">
           {ticket.title}
         </p>
-        <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
-          {formatShortDate(ticket.createdAt)}
+        <span
+          className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500"
+          title="Dernière activité"
+        >
+          {formatShortDate(ticket.lastActivityAt)}
         </span>
       </div>
+
+      {ticket.lastActivityPreview ? (
+        <p className="min-w-0 truncate text-xs text-slate-500">
+          {ticket.lastActivityAuthor ? (
+            <span className="font-medium text-slate-600">{ticket.lastActivityAuthor} : </span>
+          ) : null}
+          {ticket.lastActivityPreview}
+        </p>
+      ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">

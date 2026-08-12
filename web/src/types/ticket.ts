@@ -104,6 +104,9 @@ export type Ticket = {
   reporter: Person;
   dueDate: string | null;
   createdAt: string;
+  lastActivityAt: string;
+  lastActivityPreview: string | null;
+  lastActivityAuthor: string | null;
   tags: string[];
   watchersCount: number;
   messages: TicketMessage[];

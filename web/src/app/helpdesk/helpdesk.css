@@ -55,3 +55,21 @@
   background-color: #cbd5e1;
   border-radius: 9999px;
 }
+
+.rich-editor:empty:before {
+  content: attr(data-placeholder);
+  color: #9ca3af;
+  pointer-events: none;
+}
+
+.rich-editor img,
+.rich-message-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.375rem;
+}
+
+.rich-message-body a {
+  color: #2563eb;
+  text-decoration: underline;
+}
