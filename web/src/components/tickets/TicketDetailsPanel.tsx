@@ -169,6 +169,7 @@ export function TicketDetailsPanel({ ticket }: { ticket: Ticket }) {
                 value: user.id,
                 label: user.id === currentUser?.id ? `${user.name} (moi)` : user.name,
                 initials: user.initials,
+                avatarUrl: user.avatarUrl,
               })),
             ]}
             disabled={!permissionGuard.canAssign}
@@ -200,7 +201,7 @@ export function TicketDetailsPanel({ ticket }: { ticket: Ticket }) {
         <div>
           <FieldLabel>Rapporteur</FieldLabel>
           <div className="flex items-center gap-2">
-            <Avatar initials={ticket.reporter.initials} />
+            <Avatar initials={ticket.reporter.initials} avatarUrl={ticket.reporter.avatarUrl} />
             <span className="text-sm text-gray-700">{ticket.reporter.name}</span>
             {ticket.reporter.roleName ? (
               <span

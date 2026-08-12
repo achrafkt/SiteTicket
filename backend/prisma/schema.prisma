@@ -61,6 +61,7 @@ model User {
   email            String                @unique
   phone            String?
   password_hash    String
+  avatar_url       String?
   is_active        Boolean               @default(true)
   last_login_at    DateTime?
   created_at       DateTime              @default(now())

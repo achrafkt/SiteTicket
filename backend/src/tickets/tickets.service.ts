@@ -49,6 +49,7 @@ const attachmentSelect = {
       first_name: true,
       last_name: true,
       email: true,
+      avatar_url: true,
     },
   },
 } as const;
@@ -97,6 +98,7 @@ const ticketSelect = {
       first_name: true,
       last_name: true,
       email: true,
+      avatar_url: true,
       role: {
         select: { code: true, name: true },
       },
@@ -108,6 +110,7 @@ const ticketSelect = {
       first_name: true,
       last_name: true,
       email: true,
+      avatar_url: true,
       role: {
         select: { code: true, name: true },
       },
@@ -150,6 +153,7 @@ export class TicketsService {
                 first_name: true,
                 last_name: true,
                 email: true,
+                avatar_url: true,
               },
             },
           },
@@ -181,6 +185,7 @@ export class TicketsService {
                 first_name: true,
                 last_name: true,
                 email: true,
+                avatar_url: true,
               },
             },
             attachments: {
@@ -211,6 +216,7 @@ export class TicketsService {
                 first_name: true,
                 last_name: true,
                 email: true,
+                avatar_url: true,
               },
             },
           },
@@ -438,6 +444,7 @@ export class TicketsService {
             first_name: true,
             last_name: true,
             email: true,
+            avatar_url: true,
           },
         },
       },

@@ -38,6 +38,7 @@ export type Person = {
   name: string;
   initials: string;
   email: string;
+  avatarUrl: string | null;
   roleCode: string | null;
   roleName: string | null;
 };
@@ -62,6 +63,7 @@ export type TicketMessage = {
   id: string;
   authorName: string;
   authorInitials: string;
+  authorAvatarUrl: string | null;
   isInternal: boolean;
   body: string;
   createdAt: string;

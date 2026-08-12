@@ -10,6 +10,7 @@ export type DropdownOption = {
   description?: string;
   dotClassName?: string;
   initials?: string;
+  avatarUrl?: string | null;
   icon?: React.ElementType;
   iconClassName?: string;
   iconBgClassName?: string;
@@ -42,7 +43,7 @@ function OptionIndicator({ option }: { option: DropdownOption }) {
     return <Icon size={15} className={`shrink-0 ${option.iconClassName ?? 'text-gray-400'}`} strokeWidth={2.5} />;
   }
   if (option.initials) {
-    return <Avatar initials={option.initials} />;
+    return <Avatar initials={option.initials} avatarUrl={option.avatarUrl} />;
   }
   if (option.dotClassName) {
     return <span className={`h-2 w-2 shrink-0 rounded-full transition-colors ${option.dotClassName}`} />;

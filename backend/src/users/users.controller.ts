@@ -1,4 +1,7 @@
+import { randomUUID } from 'crypto';
+import { extname } from 'path';
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -8,12 +11,27 @@ import {
   Patch,
   Post,
   Req,
+  UploadedFile,
+  UseFilters,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request } from 'express';
+import { diskStorage } from 'multer';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { MulterExceptionFilter } from '../common/filters/multer-exception.filter';
+import {
+  ALLOWED_AVATAR_MIME_TYPES,
+  AVATAR_UPLOADS_DIR,
+  MAX_AVATAR_SIZE_BYTES,
+} from '../common/uploads.constants';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UsersService } from './users.service';
 
@@ -29,6 +47,70 @@ export class UsersController {
   @Get('assignable')
   findAssignable() {
     return this.usersService.findAssignable();
+  }
+
+  // These "me" routes must stay declared before the ":id" routes below —
+  // Nest/Express matches routes in registration order, and ":id" would
+  // otherwise swallow "/users/me" (id="me") first.
+  @Get('me')
+  findMe(@CurrentUser() user: AuthenticatedUser) {
+    return this.usersService.findOne(user.sub);
+  }
+
+  @Patch('me')
+  updateProfile(
+    @Body() updateProfileDto: UpdateProfileDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.usersService.updateProfile(user.sub, updateProfileDto);
+  }
+
+  @Post('me/avatar')
+  @UseFilters(MulterExceptionFilter)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: AVATAR_UPLOADS_DIR,
+        filename: (_req, file, callback) => {
+          callback(null, `${randomUUID()}${extname(file.originalname)}`);
+        },
+      }),
+      limits: { fileSize: MAX_AVATAR_SIZE_BYTES },
+      fileFilter: (_req, file, callback) => {
+        if (!ALLOWED_AVATAR_MIME_TYPES.includes(file.mimetype)) {
+          callback(
+            new BadRequestException(
+              'Type de fichier non supporté (JPEG, PNG ou WebP uniquement).',
+            ),
+            false,
+          );
+          return;
+        }
+        callback(null, true);
+      },
+    }),
+  )
+  uploadAvatar(
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    if (!file) {
+      throw new BadRequestException('Aucun fichier fourni.');
+    }
+    return this.usersService.updateAvatar(user.sub, file);
+  }
+
+  @Delete('me/avatar')
+  removeAvatar(@CurrentUser() user: AuthenticatedUser) {
+    return this.usersService.removeAvatar(user.sub);
+  }
+
+  @Post('me/password')
+  changePassword(
+    @Body() changePasswordDto: ChangePasswordDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.usersService.changePassword(user.sub, changePasswordDto);
   }
 
   @Get(':id')

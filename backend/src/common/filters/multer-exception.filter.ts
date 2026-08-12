@@ -8,7 +8,7 @@ export class MulterExceptionFilter implements ExceptionFilter {
     const response = host.switchToHttp().getResponse<Response>();
     const message =
       exception.code === 'LIMIT_FILE_SIZE'
-        ? 'Le fichier dépasse la taille maximale autorisée (10 Mo).'
+        ? 'Le fichier dépasse la taille maximale autorisée.'
         : exception.message;
 
     response.status(400).json({ statusCode: 400, message });

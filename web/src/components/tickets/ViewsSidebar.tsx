@@ -136,7 +136,7 @@ export function ViewsSidebar() {
                 key={item.key}
                 type="button"
                 title={item.label}
-                onClick={() => setActiveView(item.key)}
+                onClick={() => setActiveView(item.key)} 
                 className={`flex h-10 w-10 items-center justify-center rounded-lg transition-colors duration-150 ${
                   isActive
                     ? 'bg-blue-600 text-white shadow-[0_8px_20px_rgba(37,99,235,0.28)]'

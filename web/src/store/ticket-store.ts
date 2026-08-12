@@ -76,6 +76,7 @@ type TicketStoreState = {
   isUploadingAttachment: boolean;
   attachmentError: string | null;
   resetSession: (user: Person | null) => void;
+  setCurrentUser: (user: Person) => void;
   loadInitialData: () => Promise<void>;
   setActiveView: (view: ViewKey) => void;
   setActiveTicketId: (id: string | null) => void;
@@ -203,6 +204,8 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
     ...sessionInitialState(getStoredUser()),
 
     resetSession: (user) => set(sessionInitialState(user)),
+
+    setCurrentUser: (user) => set({ currentUser: user }),
 
     loadInitialData: async () => {
       set({ isLoading: true, error: null });

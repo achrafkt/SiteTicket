@@ -17,7 +17,7 @@ import {
 import { useTicketStore } from "@/store/ticket-store";
 import { clearStoredUser } from "@/lib/current-user";
 import type { TicketTypeCode } from "@/types/ticket";
-import { initialsAvatarColor } from "./ticket-visuals";
+import { Avatar } from "./Avatar";
 
 const CREATE_OPTION_ICONS: Record<TicketTypeCode, React.ElementType> = {
   RFI: FileQuestion,
@@ -174,11 +174,9 @@ export function AppHeader() {
             type="button"
             onClick={() => setUserMenuOpen((value) => !value)}
             title={displayUser?.name ?? undefined}
-            className={`flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold text-white shadow-[0_6px_14px_rgba(2,6,23,0.35)] ${initialsAvatarColor(
-              displayUser?.initials ?? "?",
-            )}`}
+            className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full shadow-[0_6px_14px_rgba(2,6,23,0.35)]"
           >
-            {displayUser?.initials ?? "?"}
+            <Avatar initials={displayUser?.initials ?? "?"} avatarUrl={displayUser?.avatarUrl} size="lg" />
           </button>
           {isUserMenuOpen ? (
             <div className="absolute right-0 top-full z-20 mt-2 w-52 rounded-xl border border-slate-200 bg-white py-1.5 text-gray-700 shadow-[0_18px_36px_rgba(15,23,42,0.16)]">
@@ -187,6 +185,10 @@ export function AppHeader() {
               </p>
               <button
                 type="button"
+                onClick={() => {
+                  setUserMenuOpen(false);
+                  router.push("/profile");
+                }}
                 className="block w-full px-3.5 py-2 text-left text-xs font-medium hover:bg-slate-50"
               >
                 Profil

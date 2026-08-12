@@ -3,10 +3,11 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
-import { UPLOADS_DIR } from './common/uploads.constants';
+import { AVATAR_UPLOADS_DIR, UPLOADS_DIR } from './common/uploads.constants';
 
 async function bootstrap() {
   mkdirSync(UPLOADS_DIR, { recursive: true });
+  mkdirSync(AVATAR_UPLOADS_DIR, { recursive: true });
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.enableCors({

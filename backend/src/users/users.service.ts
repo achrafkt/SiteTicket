@@ -1,3 +1,5 @@
+import { basename, join } from 'path';
+import { unlink } from 'fs/promises';
 import {
   BadRequestException,
   ForbiddenException,
@@ -6,8 +8,14 @@ import {
 } from '@nestjs/common';
 import { Prisma, RoleCode } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import {
+  AVATAR_UPLOADS_DIR,
+  AVATAR_URL_PREFIX,
+} from '../common/uploads.constants';
 import { PrismaService } from '../prisma/prisma.service';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 
 const userSelect = {
@@ -16,6 +24,7 @@ const userSelect = {
   last_name: true,
   email: true,
   phone: true,
+  avatar_url: true,
   is_active: true,
   last_login_at: true,
   created_at: true,
@@ -57,6 +66,7 @@ export class UsersService {
         first_name: true,
         last_name: true,
         email: true,
+        avatar_url: true,
         role: { select: { code: true, name: true } },
       },
     });
@@ -73,6 +83,94 @@ export class UsersService {
     }
 
     return user;
+  }
+
+  async updateProfile(id: string, updateProfileDto: UpdateProfileDto) {
+    if (updateProfileDto.email) {
+      const existingUser = await this.prisma.user.findFirst({
+        where: {
+          email: updateProfileDto.email,
+          id: { not: id },
+        },
+        select: { id: true },
+      });
+
+      if (existingUser) {
+        throw new BadRequestException(
+          'Cette adresse e-mail est déjà utilisée.',
+        );
+      }
+    }
+
+    return this.prisma.user.update({
+      where: { id },
+      data: {
+        first_name: updateProfileDto.firstName,
+        last_name: updateProfileDto.lastName,
+        email: updateProfileDto.email,
+      },
+      select: userSelect,
+    });
+  }
+
+  async changePassword(id: string, changePasswordDto: ChangePasswordDto) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: { password_hash: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Utilisateur introuvable.');
+    }
+
+    const isCurrentPasswordValid = await bcrypt.compare(
+      changePasswordDto.currentPassword,
+      user.password_hash,
+    );
+
+    if (!isCurrentPasswordValid) {
+      throw new BadRequestException('Le mot de passe actuel est incorrect.');
+    }
+
+    const passwordHash = await bcrypt.hash(changePasswordDto.newPassword, 10);
+    await this.prisma.user.update({
+      where: { id },
+      data: { password_hash: passwordHash },
+    });
+
+    return { success: true };
+  }
+
+  async updateAvatar(id: string, file: Express.Multer.File) {
+    const existing = await this.getAvatarUrl(id);
+
+    const updated = await this.prisma.user.update({
+      where: { id },
+      data: { avatar_url: `${AVATAR_URL_PREFIX}/${file.filename}` },
+      select: userSelect,
+    });
+
+    if (existing) {
+      await this.deleteAvatarFile(existing);
+    }
+
+    return updated;
+  }
+
+  async removeAvatar(id: string) {
+    const existing = await this.getAvatarUrl(id);
+
+    const updated = await this.prisma.user.update({
+      where: { id },
+      data: { avatar_url: null },
+      select: userSelect,
+    });
+
+    if (existing) {
+      await this.deleteAvatarFile(existing);
+    }
+
+    return updated;
   }
 
   async create(createUserDto: CreateUserDto) {
@@ -233,6 +331,27 @@ export class UsersService {
     }
 
     return role;
+  }
+
+  private async getAvatarUrl(id: string): Promise<string | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: { avatar_url: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException('Utilisateur introuvable.');
+    }
+
+    return user.avatar_url;
+  }
+
+  private async deleteAvatarFile(avatarUrl: string) {
+    try {
+      await unlink(join(AVATAR_UPLOADS_DIR, basename(avatarUrl)));
+    } catch {
+      // best-effort cleanup: file may already be missing on disk
+    }
   }
 
   private async getUserGuardInfo(id: string) {

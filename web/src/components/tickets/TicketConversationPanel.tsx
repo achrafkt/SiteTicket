@@ -114,7 +114,7 @@ function MessageItem({
     >
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-2">
-          <Avatar initials={message.authorInitials} size="md" />
+          <Avatar initials={message.authorInitials} avatarUrl={message.authorAvatarUrl} size="md" />
           <div>
             <p className="text-sm font-medium text-gray-900">{message.authorName}</p>
           </div>

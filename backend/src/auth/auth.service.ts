@@ -9,6 +9,7 @@ const userSelect = {
   last_name: true,
   email: true,
   phone: true,
+  avatar_url: true,
   is_active: true,
   last_login_at: true,
   created_at: true,
