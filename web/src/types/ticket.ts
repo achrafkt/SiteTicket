@@ -86,6 +86,19 @@ export type SubTask = {
   done: boolean;
 };
 
+export type Tag = {
+  id: string;
+  label: string;
+};
+
+export type LinkedTicketRef = {
+  id: string;
+  reference: string;
+  title: string;
+  statusCode: TicketStatusCode;
+  statusName: string;
+};
+
 export type Ticket = {
   id: string;
   reference: string;
@@ -109,12 +122,13 @@ export type Ticket = {
   lastActivityAt: string;
   lastActivityPreview: string | null;
   lastActivityAuthor: string | null;
-  tags: string[];
+  tags: Tag[];
   watchersCount: number;
   messages: TicketMessage[];
   statusHistory: TicketStatusHistoryEntry[];
   subTasks: SubTask[];
-  linkedTicketIds: string[];
+  links: LinkedTicketRef[];
+  customFields: Record<string, string>;
   attachments: Attachment[];
 };
 
