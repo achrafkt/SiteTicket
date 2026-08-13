@@ -27,7 +27,9 @@ export function ModuleShellLayout({ children }: { children: React.ReactNode }) {
       <AppHeader />
       <div className="flex flex-1 overflow-hidden">
         <NavRail />
-        <div className="flex-1 overflow-y-auto">{!mounted || !currentUser ? null : children}</div>
+        <div className="flex-1 overflow-y-auto rounded-t-[20px] bg-white">
+          {!mounted || !currentUser ? null : children}
+        </div>
       </div>
     </div>
   );
