@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { ChevronDown, ChevronRight, Plus, RefreshCw, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ChevronDown, ChevronRight, Plus, RefreshCw, Search, X } from 'lucide-react';
 import { useTicketStore } from '@/store/ticket-store';
 import { getDueDateUrgency } from '@/lib/ticket-rules';
 import { canDeleteAttachment, getTicketPermissionGuard } from '@/lib/ticket-permissions';
@@ -57,6 +57,330 @@ function CollapsibleSection({
   );
 }
 
+function SubtasksEditor({
+  ticketId,
+  subTasks,
+  disabled,
+}: {
+  ticketId: string;
+  subTasks: Ticket['subTasks'];
+  disabled: boolean;
+}) {
+  const addTicketSubtask = useTicketStore((state) => state.addTicketSubtask);
+  const toggleTicketSubtask = useTicketStore((state) => state.toggleTicketSubtask);
+  const removeTicketSubtask = useTicketStore((state) => state.removeTicketSubtask);
+  const [draft, setDraft] = useState('');
+  const [isAdding, setIsAdding] = useState(false);
+
+  function submit() {
+    const value = draft.trim();
+    if (!value) {
+      setIsAdding(false);
+      return;
+    }
+    addTicketSubtask(ticketId, value);
+    setDraft('');
+    setIsAdding(false);
+  }
+
+  return (
+    <div className="space-y-1.5">
+      {subTasks.length === 0 ? (
+        <p className="text-xs text-gray-400">Aucune sous-tâche.</p>
+      ) : (
+        subTasks.map((task) => (
+          <div key={task.id} className="group flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={task.done}
+              disabled={disabled}
+              onChange={(event) => toggleTicketSubtask(ticketId, task.id, event.target.checked)}
+              className="h-3.5 w-3.5 rounded border-gray-300"
+            />
+            <span className={`flex-1 ${task.done ? 'text-gray-400 line-through' : ''}`}>{task.label}</span>
+            {!disabled ? (
+              <button
+                type="button"
+                onClick={() => removeTicketSubtask(ticketId, task.id)}
+                title="Supprimer la sous-tâche"
+                className="rounded p-0.5 text-gray-300 opacity-0 transition-opacity hover:bg-gray-100 hover:text-gray-600 group-hover:opacity-100"
+              >
+                <X size={12} />
+              </button>
+            ) : null}
+          </div>
+        ))
+      )}
+
+      {disabled ? null : isAdding ? (
+        <input
+          autoFocus
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={() => (draft.trim() ? submit() : setIsAdding(false))}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              submit();
+            }
+            if (event.key === 'Escape') {
+              setDraft('');
+              setIsAdding(false);
+            }
+          }}
+          placeholder="Nouvelle tâche"
+          className="w-full rounded-md border border-dashed border-gray-300 px-2 py-1 text-xs focus:outline-none"
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setIsAdding(true)}
+          className="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-700"
+        >
+          <Plus size={12} /> Ajouter une tâche
+        </button>
+      )}
+    </div>
+  );
+}
+
+function CustomFieldsEditor({
+  ticketId,
+  fields,
+  disabled,
+}: {
+  ticketId: string;
+  fields: Record<string, string>;
+  disabled: boolean;
+}) {
+  const setTicketCustomField = useTicketStore((state) => state.setTicketCustomField);
+  const removeTicketCustomField = useTicketStore((state) => state.removeTicketCustomField);
+  const [isAdding, setIsAdding] = useState(false);
+  const [keyDraft, setKeyDraft] = useState('');
+  const [valueDraft, setValueDraft] = useState('');
+
+  const entries = Object.entries(fields);
+
+  function cancel() {
+    setKeyDraft('');
+    setValueDraft('');
+    setIsAdding(false);
+  }
+
+  function submit() {
+    const key = keyDraft.trim();
+    const value = valueDraft.trim();
+    if (!key || !value) {
+      cancel();
+      return;
+    }
+    setTicketCustomField(ticketId, key, value);
+    cancel();
+  }
+
+  return (
+    <div className="space-y-2">
+      {entries.length === 0 ? (
+        <p className="text-xs text-gray-400">Aucun champ personnalisé pour ce ticket.</p>
+      ) : (
+        <div className="space-y-1.5">
+          {entries.map(([key, value]) => (
+            <div
+              key={key}
+              className="group flex items-start justify-between gap-2 rounded-md bg-gray-50 px-2 py-1.5 text-xs"
+            >
+              <div className="min-w-0">
+                <p className="font-medium text-gray-600">{key}</p>
+                <p className="wrap-break-word text-gray-500">{value}</p>
+              </div>
+              {!disabled ? (
+                <button
+                  type="button"
+                  onClick={() => removeTicketCustomField(ticketId, key)}
+                  title="Supprimer ce champ"
+                  className="shrink-0 rounded p-0.5 text-gray-300 opacity-0 transition-opacity hover:bg-gray-200 hover:text-gray-600 group-hover:opacity-100"
+                >
+                  <X size={12} />
+                </button>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {disabled ? null : isAdding ? (
+        <div className="space-y-1.5 rounded-md border border-dashed border-gray-300 p-2">
+          <input
+            autoFocus
+            value={keyDraft}
+            onChange={(event) => setKeyDraft(event.target.value)}
+            placeholder="Nom du champ"
+            className="w-full rounded border border-gray-200 px-2 py-1 text-xs focus:outline-none"
+          />
+          <input
+            value={valueDraft}
+            onChange={(event) => setValueDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                submit();
+              }
+              if (event.key === 'Escape') {
+                cancel();
+              }
+            }}
+            placeholder="Valeur"
+            className="w-full rounded border border-gray-200 px-2 py-1 text-xs focus:outline-none"
+          />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={submit}
+              className="rounded-md bg-blue-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-blue-700"
+            >
+              Ajouter
+            </button>
+            <button
+              type="button"
+              onClick={cancel}
+              className="text-[11px] font-medium text-gray-500 hover:text-gray-700"
+            >
+              Annuler
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setIsAdding(true)}
+          className="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-700"
+        >
+          <Plus size={12} /> Ajouter un champ
+        </button>
+      )}
+    </div>
+  );
+}
+
+function LinkedTicketsEditor({ ticket, disabled }: { ticket: Ticket; disabled: boolean }) {
+  const allTickets = useTicketStore((state) => state.tickets);
+  const addTicketLink = useTicketStore((state) => state.addTicketLink);
+  const removeTicketLink = useTicketStore((state) => state.removeTicketLink);
+  const setActiveTicketId = useTicketStore((state) => state.setActiveTicketId);
+  const [isPickerOpen, setPickerOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isPickerOpen) return;
+    function handleClickOutside(event: MouseEvent) {
+      if (pickerRef.current && !pickerRef.current.contains(event.target as Node)) {
+        setPickerOpen(false);
+        setSearch('');
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isPickerOpen]);
+
+  const linkedIds = new Set(ticket.links.map((link) => link.id));
+  const term = search.trim().toLowerCase();
+  const results = !term
+    ? []
+    : allTickets
+        .filter((candidate) => candidate.id !== ticket.id && !linkedIds.has(candidate.id))
+        .filter(
+          (candidate) =>
+            candidate.title.toLowerCase().includes(term) || candidate.reference.toLowerCase().includes(term),
+        )
+        .slice(0, 8);
+
+  function selectTicket(id: string) {
+    addTicketLink(ticket.id, id);
+    setSearch('');
+    setPickerOpen(false);
+  }
+
+  return (
+    <div className="space-y-2">
+      {ticket.links.length === 0 ? (
+        <p className="text-xs text-gray-400">Aucun ticket lié.</p>
+      ) : (
+        <ul className="space-y-1">
+          {ticket.links.map((link) => (
+            <li key={link.id} className="group flex items-center justify-between gap-2 text-sm">
+              <button
+                type="button"
+                onClick={() => setActiveTicketId(link.id)}
+                title={link.title}
+                className="min-w-0 flex-1 truncate text-left text-blue-600 hover:underline"
+              >
+                <span className="font-medium">{link.reference}</span> · {link.title}
+              </button>
+              {!disabled ? (
+                <button
+                  type="button"
+                  onClick={() => removeTicketLink(ticket.id, link.id)}
+                  title="Supprimer ce lien"
+                  className="shrink-0 rounded p-0.5 text-gray-300 opacity-0 transition-opacity hover:bg-gray-100 hover:text-gray-600 group-hover:opacity-100"
+                >
+                  <X size={12} />
+                </button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {disabled ? null : (
+        <div className="relative" ref={pickerRef}>
+          {isPickerOpen ? (
+            <div className="rounded-md border border-gray-200 p-2 shadow-sm">
+              <div className="flex items-center gap-1.5 rounded-md border border-gray-200 px-2 py-1">
+                <Search size={12} className="text-gray-400" />
+                <input
+                  autoFocus
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Rechercher un ticket..."
+                  className="w-full text-xs text-gray-700 placeholder:text-gray-400 focus:outline-none"
+                />
+              </div>
+              {term ? (
+                <div className="mt-1.5 max-h-40 overflow-y-auto">
+                  {results.length === 0 ? (
+                    <p className="px-1 py-1 text-xs text-gray-400">Aucun résultat.</p>
+                  ) : (
+                    results.map((candidate) => (
+                      <button
+                        key={candidate.id}
+                        type="button"
+                        onClick={() => selectTicket(candidate.id)}
+                        className="flex w-full items-center gap-1.5 rounded px-1.5 py-1 text-left text-xs hover:bg-gray-50"
+                      >
+                        <span className="font-medium text-gray-700">{candidate.reference}</span>
+                        <span className="truncate text-gray-500">{candidate.title}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setPickerOpen(true)}
+              className="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-700"
+            >
+              <Plus size={12} /> Lier un ticket
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function TicketDetailsPanel({ ticket }: { ticket: Ticket }) {
   const statuses = useTicketStore((state) => state.statuses);
   const users = useTicketStore((state) => state.users);
@@ -69,9 +393,10 @@ export function TicketDetailsPanel({ ticket }: { ticket: Ticket }) {
   const detailLoadingId = useTicketStore((state) => state.detailLoadingId);
   const detailError = useTicketStore((state) => state.detailError);
   const ticketActionError = useTicketStore((state) => state.ticketActionError);
+  const addTicketTag = useTicketStore((state) => state.addTicketTag);
+  const removeTicketTag = useTicketStore((state) => state.removeTicketTag);
   const [tagDraft, setTagDraft] = useState('');
   const [isAddingTag, setIsAddingTag] = useState(false);
-  const [tags, setTags] = useState(ticket.tags);
 
   const isDetailLoading = detailLoadingId === ticket.id;
   const isAssignedToMe = ticket.assignees.some((assignee) => assignee.id === currentUser?.id);
@@ -80,16 +405,15 @@ export function TicketDetailsPanel({ ticket }: { ticket: Ticket }) {
 
   function addTag() {
     const value = tagDraft.trim();
-    if (!value) return;
-    if (!tags.includes(value)) {
-      setTags((current) => [...current, value]);
+    if (!value) {
+      setIsAddingTag(false);
+      return;
+    }
+    if (!ticket.tags.some((tag) => tag.label === value)) {
+      addTicketTag(ticket.id, value);
     }
     setTagDraft('');
     setIsAddingTag(false);
-  }
-
-  function removeTag(tag: string) {
-    setTags((current) => current.filter((existing) => existing !== tag));
   }
 
   return (
@@ -223,24 +547,26 @@ export function TicketDetailsPanel({ ticket }: { ticket: Ticket }) {
         <div>
           <FieldLabel>Tags</FieldLabel>
           <div className="flex flex-wrap items-center gap-1.5">
-            {tags.map((tag) => (
+            {ticket.tags.map((tag) => (
               <span
-                key={tag}
+                key={tag.id}
                 className="group flex items-center gap-1 rounded-full bg-gray-100 py-0.5 pl-2 pr-1 text-xs text-gray-600"
               >
-                {tag}
-                <button
-                  type="button"
-                  onClick={() => removeTag(tag)}
-                  title={`Supprimer ${tag}`}
-                  className="rounded-full p-0.5 text-gray-400 opacity-0 transition-opacity hover:bg-gray-200 hover:text-gray-600 group-hover:opacity-100"
-                >
-                  <X size={10} />
-                </button>
+                {tag.label}
+                {permissionGuard.canModify ? (
+                  <button
+                    type="button"
+                    onClick={() => removeTicketTag(ticket.id, tag.id)}
+                    title={`Supprimer ${tag.label}`}
+                    className="rounded-full p-0.5 text-gray-400 opacity-0 transition-opacity hover:bg-gray-200 hover:text-gray-600 group-hover:opacity-100"
+                  >
+                    <X size={10} />
+                  </button>
+                ) : null}
               </span>
             ))}
 
-            {isAddingTag ? (
+            {!permissionGuard.canModify ? null : isAddingTag ? (
               <input
                 autoFocus
                 value={tagDraft}
@@ -274,34 +600,23 @@ export function TicketDetailsPanel({ ticket }: { ticket: Ticket }) {
 
       <div className="px-4 pb-4">
         <CollapsibleSection title="Tâches" count={ticket.subTasks.length}>
-          <div className="space-y-1.5">
-            {ticket.subTasks.length === 0 ? (
-              <p className="text-xs text-gray-400">Aucune sous-tâche.</p>
-            ) : (
-              ticket.subTasks.map((task) => (
-                <label key={task.id} className="flex items-center gap-2 text-sm text-gray-700">
-                  <input type="checkbox" defaultChecked={task.done} className="h-3.5 w-3.5 rounded border-gray-300" />
-                  {task.label}
-                </label>
-              ))
-            )}
-          </div>
+          <SubtasksEditor
+            ticketId={ticket.id}
+            subTasks={ticket.subTasks}
+            disabled={!permissionGuard.canModify}
+          />
         </CollapsibleSection>
 
-        <CollapsibleSection title="Champs collectés">
-          <p className="text-xs text-gray-400">Aucun champ personnalisé pour ce type de ticket.</p>
+        <CollapsibleSection title="Champs collectés" count={Object.keys(ticket.customFields).length}>
+          <CustomFieldsEditor
+            ticketId={ticket.id}
+            fields={ticket.customFields}
+            disabled={!permissionGuard.canModify}
+          />
         </CollapsibleSection>
 
-        <CollapsibleSection title="Tickets liés" count={ticket.linkedTicketIds.length}>
-          {ticket.linkedTicketIds.length === 0 ? (
-            <p className="text-xs text-gray-400">Aucun ticket lié.</p>
-          ) : (
-            <ul className="space-y-1 text-sm text-blue-600">
-              {ticket.linkedTicketIds.map((id) => (
-                <li key={id}>{id}</li>
-              ))}
-            </ul>
-          )}
+        <CollapsibleSection title="Tickets liés" count={ticket.links.length}>
+          <LinkedTicketsEditor ticket={ticket} disabled={!permissionGuard.canModify} />
         </CollapsibleSection>
 
         <CollapsibleSection title="Pièces jointes" count={ticket.attachments.length}>

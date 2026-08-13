@@ -6,12 +6,17 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { RoleCode } from '@prisma/client';
+import { Prisma, RoleCode } from '@prisma/client';
 import { sanitizeCommentHtml } from '../common/sanitize-comment-html';
 import { UPLOADS_DIR, UPLOADS_URL_PREFIX } from '../common/uploads.constants';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
+import { CreateLinkDto } from './dto/create-link.dto';
+import { CreateSubtaskDto } from './dto/create-subtask.dto';
+import { CreateTagDto } from './dto/create-tag.dto';
 import { CreateTicketDto } from './dto/create-ticket.dto';
+import { SetCustomFieldDto } from './dto/set-custom-field.dto';
+import { UpdateSubtaskDto } from './dto/update-subtask.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 import {
   TicketAuthorizationContext,
@@ -21,6 +26,18 @@ import {
 export interface TicketActor {
   id: string;
   role: RoleCode;
+}
+
+function isPlainObject(
+  value: Prisma.JsonValue | null | undefined,
+): value is Record<string, string> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isUniqueConstraintError(err: unknown): boolean {
+  return (
+    err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002'
+  );
 }
 
 const MODIFIABLE_TICKET_FIELDS: Array<keyof UpdateTicketDto> = [
@@ -54,6 +71,15 @@ const attachmentSelect = {
   },
 } as const;
 
+const linkedTicketSummarySelect = {
+  id: true,
+  ticket_number: true,
+  title: true,
+  status: {
+    select: { code: true, name: true },
+  },
+} as const;
+
 const ticketSelect = {
   id: true,
   ticket_number: true,
@@ -67,6 +93,7 @@ const ticketSelect = {
   due_date: true,
   resolved_at: true,
   closed_at: true,
+  custom_fields: true,
   created_at: true,
   updated_at: true,
   project: {
@@ -221,6 +248,20 @@ export class TicketsService {
             },
           },
         },
+        tags: {
+          orderBy: [{ created_at: 'asc' }],
+          select: { id: true, label: true },
+        },
+        subtasks: {
+          orderBy: [{ created_at: 'asc' }],
+          select: { id: true, label: true, done: true },
+        },
+        links_from: {
+          select: { linked_ticket: { select: linkedTicketSummarySelect } },
+        },
+        links_to: {
+          select: { ticket: { select: linkedTicketSummarySelect } },
+        },
       },
     });
 
@@ -228,7 +269,15 @@ export class TicketsService {
       throw new NotFoundException('Ticket introuvable.');
     }
 
-    return ticket;
+    const { links_from, links_to, ...rest } = ticket;
+
+    return {
+      ...rest,
+      links: [
+        ...links_from.map((link) => link.linked_ticket),
+        ...links_to.map((link) => link.ticket),
+      ],
+    };
   }
 
   async create(createTicketDto: CreateTicketDto, actor: TicketActor) {
@@ -517,6 +566,226 @@ export class TicketsService {
     }
 
     return { success: true };
+  }
+
+  async addTag(ticketId: string, dto: CreateTagDto, actor: TicketActor) {
+    await this.ensureCanModify(ticketId, actor);
+
+    try {
+      return await this.prisma.ticketTag.create({
+        data: { ticket_id: ticketId, label: dto.label.trim() },
+        select: { id: true, label: true },
+      });
+    } catch (err) {
+      if (isUniqueConstraintError(err)) {
+        throw new BadRequestException('Ce tag existe déjà sur ce ticket.');
+      }
+      throw err;
+    }
+  }
+
+  async removeTag(ticketId: string, tagId: string, actor: TicketActor) {
+    await this.ensureCanModify(ticketId, actor);
+
+    const tag = await this.prisma.ticketTag.findUnique({
+      where: { id: tagId },
+      select: { id: true, ticket_id: true },
+    });
+
+    if (!tag || tag.ticket_id !== ticketId) {
+      throw new NotFoundException('Tag introuvable.');
+    }
+
+    await this.prisma.ticketTag.delete({ where: { id: tagId } });
+
+    return { success: true };
+  }
+
+  async addSubtask(
+    ticketId: string,
+    dto: CreateSubtaskDto,
+    actor: TicketActor,
+  ) {
+    await this.ensureCanModify(ticketId, actor);
+
+    return this.prisma.ticketSubtask.create({
+      data: { ticket_id: ticketId, label: dto.label.trim() },
+      select: { id: true, label: true, done: true },
+    });
+  }
+
+  async updateSubtask(
+    ticketId: string,
+    subtaskId: string,
+    dto: UpdateSubtaskDto,
+    actor: TicketActor,
+  ) {
+    await this.ensureCanModify(ticketId, actor);
+
+    const subtask = await this.prisma.ticketSubtask.findUnique({
+      where: { id: subtaskId },
+      select: { id: true, ticket_id: true },
+    });
+
+    if (!subtask || subtask.ticket_id !== ticketId) {
+      throw new NotFoundException('Sous-tâche introuvable.');
+    }
+
+    return this.prisma.ticketSubtask.update({
+      where: { id: subtaskId },
+      data: {
+        label: dto.label?.trim(),
+        done: dto.done,
+      },
+      select: { id: true, label: true, done: true },
+    });
+  }
+
+  async removeSubtask(ticketId: string, subtaskId: string, actor: TicketActor) {
+    await this.ensureCanModify(ticketId, actor);
+
+    const subtask = await this.prisma.ticketSubtask.findUnique({
+      where: { id: subtaskId },
+      select: { id: true, ticket_id: true },
+    });
+
+    if (!subtask || subtask.ticket_id !== ticketId) {
+      throw new NotFoundException('Sous-tâche introuvable.');
+    }
+
+    await this.prisma.ticketSubtask.delete({ where: { id: subtaskId } });
+
+    return { success: true };
+  }
+
+  async addLink(ticketId: string, dto: CreateLinkDto, actor: TicketActor) {
+    await this.ensureCanModify(ticketId, actor);
+
+    if (dto.linkedTicketId === ticketId) {
+      throw new BadRequestException(
+        'Un ticket ne peut pas être lié à lui-même.',
+      );
+    }
+
+    await this.ensureTicketExists(dto.linkedTicketId);
+
+    const existing = await this.prisma.ticketLink.findFirst({
+      where: {
+        OR: [
+          { ticket_id: ticketId, linked_ticket_id: dto.linkedTicketId },
+          { ticket_id: dto.linkedTicketId, linked_ticket_id: ticketId },
+        ],
+      },
+      select: { id: true },
+    });
+
+    if (existing) {
+      throw new BadRequestException('Ces tickets sont déjà liés.');
+    }
+
+    const link = await this.prisma.ticketLink.create({
+      data: { ticket_id: ticketId, linked_ticket_id: dto.linkedTicketId },
+      select: { linked_ticket: { select: linkedTicketSummarySelect } },
+    });
+
+    return link.linked_ticket;
+  }
+
+  async removeLink(
+    ticketId: string,
+    linkedTicketId: string,
+    actor: TicketActor,
+  ) {
+    await this.ensureCanModify(ticketId, actor);
+
+    const link = await this.prisma.ticketLink.findFirst({
+      where: {
+        OR: [
+          { ticket_id: ticketId, linked_ticket_id: linkedTicketId },
+          { ticket_id: linkedTicketId, linked_ticket_id: ticketId },
+        ],
+      },
+      select: { id: true },
+    });
+
+    if (!link) {
+      throw new NotFoundException('Lien introuvable.');
+    }
+
+    await this.prisma.ticketLink.delete({ where: { id: link.id } });
+
+    return { success: true };
+  }
+
+  async setCustomField(
+    ticketId: string,
+    dto: SetCustomFieldDto,
+    actor: TicketActor,
+  ) {
+    await this.ensureCanModify(ticketId, actor);
+
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id: ticketId },
+      select: { custom_fields: true },
+    });
+
+    if (!ticket) {
+      throw new NotFoundException('Ticket introuvable.');
+    }
+
+    const currentFields = isPlainObject(ticket.custom_fields)
+      ? ticket.custom_fields
+      : {};
+
+    const updated = await this.prisma.ticket.update({
+      where: { id: ticketId },
+      data: { custom_fields: { ...currentFields, [dto.key]: dto.value } },
+      select: { custom_fields: true },
+    });
+
+    return updated.custom_fields;
+  }
+
+  async removeCustomField(ticketId: string, key: string, actor: TicketActor) {
+    await this.ensureCanModify(ticketId, actor);
+
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id: ticketId },
+      select: { custom_fields: true },
+    });
+
+    if (!ticket) {
+      throw new NotFoundException('Ticket introuvable.');
+    }
+
+    const currentFields = isPlainObject(ticket.custom_fields)
+      ? ticket.custom_fields
+      : {};
+    const remainingFields = Object.fromEntries(
+      Object.entries(currentFields).filter(([fieldKey]) => fieldKey !== key),
+    );
+
+    const updated = await this.prisma.ticket.update({
+      where: { id: ticketId },
+      data: { custom_fields: remainingFields },
+      select: { custom_fields: true },
+    });
+
+    return updated.custom_fields;
+  }
+
+  private async ensureCanModify(id: string, actor: TicketActor) {
+    const ticket = await this.getAuthorizationContext(id);
+
+    if (
+      !(await this.permissions.canModifyTicket(actor.role, actor.id, ticket))
+    ) {
+      throw new ForbiddenException(
+        'Votre rôle ne permet pas de modifier ce ticket.',
+      );
+    }
+
+    return ticket;
   }
 
   private async generateTicketNumber() {

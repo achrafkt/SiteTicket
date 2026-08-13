@@ -54,6 +54,24 @@ export type ApiStatusHistoryEntry = {
   changed_by_user: ApiUserRef;
 };
 
+export type ApiTag = {
+  id: string;
+  label: string;
+};
+
+export type ApiSubtask = {
+  id: string;
+  label: string;
+  done: boolean;
+};
+
+export type ApiLinkedTicketRef = {
+  id: string;
+  ticket_number: string;
+  title: string;
+  status: { code: string; name: string };
+};
+
 export type ApiTicket = {
   id: string;
   ticket_number: string;
@@ -77,6 +95,10 @@ export type ApiTicket = {
   comments?: ApiComment[];
   status_history?: ApiStatusHistoryEntry[];
   attachments?: ApiAttachment[];
+  tags?: ApiTag[];
+  subtasks?: ApiSubtask[];
+  links?: ApiLinkedTicketRef[];
+  custom_fields?: Record<string, string> | null;
 };
 
 export type ApiProject = {
@@ -181,4 +203,68 @@ export function getTicketTypes() {
 
 export function getAssignableUsers() {
   return apiFetch<ApiUserRef[]>('/users/assignable');
+}
+
+export function addTicketTag(ticketId: string, label: string) {
+  return apiFetch<ApiTag>(`/tickets/${ticketId}/tags`, {
+    method: 'POST',
+    body: JSON.stringify({ label }),
+  });
+}
+
+export function removeTicketTag(ticketId: string, tagId: string) {
+  return apiFetch<{ success: boolean }>(`/tickets/${ticketId}/tags/${tagId}`, {
+    method: 'DELETE',
+  });
+}
+
+export function addTicketSubtask(ticketId: string, label: string) {
+  return apiFetch<ApiSubtask>(`/tickets/${ticketId}/subtasks`, {
+    method: 'POST',
+    body: JSON.stringify({ label }),
+  });
+}
+
+export function updateTicketSubtask(
+  ticketId: string,
+  subtaskId: string,
+  payload: Partial<{ label: string; done: boolean }>,
+) {
+  return apiFetch<ApiSubtask>(`/tickets/${ticketId}/subtasks/${subtaskId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function removeTicketSubtask(ticketId: string, subtaskId: string) {
+  return apiFetch<{ success: boolean }>(`/tickets/${ticketId}/subtasks/${subtaskId}`, {
+    method: 'DELETE',
+  });
+}
+
+export function addTicketLink(ticketId: string, linkedTicketId: string) {
+  return apiFetch<ApiLinkedTicketRef>(`/tickets/${ticketId}/links`, {
+    method: 'POST',
+    body: JSON.stringify({ linkedTicketId }),
+  });
+}
+
+export function removeTicketLink(ticketId: string, linkedTicketId: string) {
+  return apiFetch<{ success: boolean }>(`/tickets/${ticketId}/links/${linkedTicketId}`, {
+    method: 'DELETE',
+  });
+}
+
+export function setTicketCustomField(ticketId: string, key: string, value: string) {
+  return apiFetch<Record<string, string>>(`/tickets/${ticketId}/custom-fields`, {
+    method: 'PUT',
+    body: JSON.stringify({ key, value }),
+  });
+}
+
+export function removeTicketCustomField(ticketId: string, key: string) {
+  return apiFetch<Record<string, string>>(
+    `/tickets/${ticketId}/custom-fields/${encodeURIComponent(key)}`,
+    { method: 'DELETE' },
+  );
 }

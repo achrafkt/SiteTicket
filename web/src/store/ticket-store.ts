@@ -1,9 +1,23 @@
 import { create } from 'zustand';
 import { ApiError } from '@/lib/api';
 import { getStoredUser } from '@/lib/current-user';
-import { mapAttachment, mapComment, mapPerson, mapProject, mapStatus, mapTicket, mapType } from '@/lib/ticket-mapper';
+import {
+  mapAttachment,
+  mapComment,
+  mapLinkedTicket,
+  mapPerson,
+  mapProject,
+  mapStatus,
+  mapSubtask,
+  mapTag,
+  mapTicket,
+  mapType,
+} from '@/lib/ticket-mapper';
 import { isTicketOverdue } from '@/lib/ticket-rules';
 import {
+  addTicketLink as addTicketLinkRequest,
+  addTicketSubtask as addTicketSubtaskRequest,
+  addTicketTag as addTicketTagRequest,
   createComment,
   createTicket as createTicketRequest,
   deleteAttachment,
@@ -14,7 +28,13 @@ import {
   getTicketStatuses,
   getTicketTypes,
   getTickets,
+  removeTicketCustomField as removeTicketCustomFieldRequest,
+  removeTicketLink as removeTicketLinkRequest,
+  removeTicketSubtask as removeTicketSubtaskRequest,
+  removeTicketTag as removeTicketTagRequest,
+  setTicketCustomField as setTicketCustomFieldRequest,
   updateTicket,
+  updateTicketSubtask,
   uploadAttachment,
   type CreateTicketPayload,
 } from '@/lib/tickets-api';
@@ -98,6 +118,15 @@ type TicketStoreState = {
     commentId?: string,
   ) => Promise<Attachment | null>;
   deleteTicketAttachment: (ticketId: string, attachmentId: string) => Promise<void>;
+  addTicketTag: (ticketId: string, label: string) => Promise<void>;
+  removeTicketTag: (ticketId: string, tagId: string) => Promise<void>;
+  addTicketSubtask: (ticketId: string, label: string) => Promise<void>;
+  toggleTicketSubtask: (ticketId: string, subtaskId: string, done: boolean) => Promise<void>;
+  removeTicketSubtask: (ticketId: string, subtaskId: string) => Promise<void>;
+  addTicketLink: (ticketId: string, linkedTicketId: string) => Promise<void>;
+  removeTicketLink: (ticketId: string, linkedTicketId: string) => Promise<void>;
+  setTicketCustomField: (ticketId: string, key: string, value: string) => Promise<void>;
+  removeTicketCustomField: (ticketId: string, key: string) => Promise<void>;
 };
 
 export function filterTicketsByView(
@@ -180,9 +209,6 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
             ticket.id === id
               ? {
                   ...detailed,
-                  tags: ticket.tags,
-                  subTasks: ticket.subTasks,
-                  linkedTicketIds: ticket.linkedTicketIds,
                   watchersCount: ticket.watchersCount,
                 }
               : ticket,
@@ -461,6 +487,196 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
           tickets: previous,
           attachmentError:
             err instanceof ApiError ? err.message : 'Impossible de supprimer la pièce jointe.',
+        });
+      }
+    },
+
+    addTicketTag: async (ticketId, label) => {
+      set({ ticketActionError: null });
+      try {
+        const apiTag = await addTicketTagRequest(ticketId, label);
+        const tag = mapTag(apiTag);
+        set((state) => ({
+          tickets: state.tickets.map((ticket) =>
+            ticket.id === ticketId ? { ...ticket, tags: [...ticket.tags, tag] } : ticket,
+          ),
+        }));
+      } catch (err) {
+        set({
+          ticketActionError: err instanceof ApiError ? err.message : "Impossible d'ajouter le tag.",
+        });
+      }
+    },
+
+    removeTicketTag: async (ticketId, tagId) => {
+      const previous = get().tickets;
+      set((state) => ({
+        tickets: state.tickets.map((ticket) =>
+          ticket.id === ticketId
+            ? { ...ticket, tags: ticket.tags.filter((tag) => tag.id !== tagId) }
+            : ticket,
+        ),
+        ticketActionError: null,
+      }));
+
+      try {
+        await removeTicketTagRequest(ticketId, tagId);
+      } catch (err) {
+        set({
+          tickets: previous,
+          ticketActionError: err instanceof ApiError ? err.message : 'Impossible de supprimer le tag.',
+        });
+      }
+    },
+
+    addTicketSubtask: async (ticketId, label) => {
+      set({ ticketActionError: null });
+      try {
+        const apiSubtask = await addTicketSubtaskRequest(ticketId, label);
+        const subtask = mapSubtask(apiSubtask);
+        set((state) => ({
+          tickets: state.tickets.map((ticket) =>
+            ticket.id === ticketId ? { ...ticket, subTasks: [...ticket.subTasks, subtask] } : ticket,
+          ),
+        }));
+      } catch (err) {
+        set({
+          ticketActionError:
+            err instanceof ApiError ? err.message : "Impossible d'ajouter la sous-tâche.",
+        });
+      }
+    },
+
+    toggleTicketSubtask: async (ticketId, subtaskId, done) => {
+      const previous = get().tickets;
+      set((state) => ({
+        tickets: state.tickets.map((ticket) =>
+          ticket.id === ticketId
+            ? {
+                ...ticket,
+                subTasks: ticket.subTasks.map((task) =>
+                  task.id === subtaskId ? { ...task, done } : task,
+                ),
+              }
+            : ticket,
+        ),
+        ticketActionError: null,
+      }));
+
+      try {
+        await updateTicketSubtask(ticketId, subtaskId, { done });
+      } catch (err) {
+        set({
+          tickets: previous,
+          ticketActionError:
+            err instanceof ApiError ? err.message : 'Impossible de mettre à jour la sous-tâche.',
+        });
+      }
+    },
+
+    removeTicketSubtask: async (ticketId, subtaskId) => {
+      const previous = get().tickets;
+      set((state) => ({
+        tickets: state.tickets.map((ticket) =>
+          ticket.id === ticketId
+            ? { ...ticket, subTasks: ticket.subTasks.filter((task) => task.id !== subtaskId) }
+            : ticket,
+        ),
+        ticketActionError: null,
+      }));
+
+      try {
+        await removeTicketSubtaskRequest(ticketId, subtaskId);
+      } catch (err) {
+        set({
+          tickets: previous,
+          ticketActionError:
+            err instanceof ApiError ? err.message : 'Impossible de supprimer la sous-tâche.',
+        });
+      }
+    },
+
+    addTicketLink: async (ticketId, linkedTicketId) => {
+      set({ ticketActionError: null });
+      try {
+        const apiLink = await addTicketLinkRequest(ticketId, linkedTicketId);
+        const link = mapLinkedTicket(apiLink);
+        set((state) => ({
+          tickets: state.tickets.map((ticket) =>
+            ticket.id === ticketId ? { ...ticket, links: [...ticket.links, link] } : ticket,
+          ),
+        }));
+      } catch (err) {
+        set({
+          ticketActionError: err instanceof ApiError ? err.message : 'Impossible de lier ce ticket.',
+        });
+      }
+    },
+
+    removeTicketLink: async (ticketId, linkedTicketId) => {
+      const previous = get().tickets;
+      set((state) => ({
+        tickets: state.tickets.map((ticket) =>
+          ticket.id === ticketId
+            ? { ...ticket, links: ticket.links.filter((link) => link.id !== linkedTicketId) }
+            : ticket,
+        ),
+        ticketActionError: null,
+      }));
+
+      try {
+        await removeTicketLinkRequest(ticketId, linkedTicketId);
+      } catch (err) {
+        set({
+          tickets: previous,
+          ticketActionError:
+            err instanceof ApiError ? err.message : 'Impossible de supprimer ce lien.',
+        });
+      }
+    },
+
+    setTicketCustomField: async (ticketId, key, value) => {
+      const previous = get().tickets;
+      set((state) => ({
+        tickets: state.tickets.map((ticket) =>
+          ticket.id === ticketId
+            ? { ...ticket, customFields: { ...ticket.customFields, [key]: value } }
+            : ticket,
+        ),
+        ticketActionError: null,
+      }));
+
+      try {
+        await setTicketCustomFieldRequest(ticketId, key, value);
+      } catch (err) {
+        set({
+          tickets: previous,
+          ticketActionError:
+            err instanceof ApiError ? err.message : "Impossible d'ajouter ce champ.",
+        });
+      }
+    },
+
+    removeTicketCustomField: async (ticketId, key) => {
+      const previous = get().tickets;
+      set((state) => ({
+        tickets: state.tickets.map((ticket) => {
+          if (ticket.id !== ticketId) return ticket;
+          const remaining = Object.fromEntries(
+            Object.entries(ticket.customFields).filter(([fieldKey]) => fieldKey !== key),
+          );
+          return { ...ticket, customFields: remaining };
+        }),
+        ticketActionError: null,
+      }));
+
+      try {
+        await removeTicketCustomFieldRequest(ticketId, key);
+      } catch (err) {
+        set({
+          tickets: previous,
+          ticketActionError:
+            err instanceof ApiError ? err.message : 'Impossible de supprimer ce champ.',
         });
       }
     },

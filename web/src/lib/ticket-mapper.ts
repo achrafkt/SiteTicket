@@ -3,8 +3,11 @@ import { stripHtmlToText, truncateText } from './html-text';
 import type {
   ApiAttachment,
   ApiComment,
+  ApiLinkedTicketRef,
   ApiProject,
   ApiStatusHistoryEntry,
+  ApiSubtask,
+  ApiTag,
   ApiTicket,
   ApiTicketStatus,
   ApiTicketType,
@@ -12,8 +15,11 @@ import type {
 } from './tickets-api';
 import type {
   Attachment,
+  LinkedTicketRef,
   Person,
   Project,
+  SubTask,
+  Tag,
   Ticket,
   TicketMessage,
   TicketPriority,
@@ -70,6 +76,24 @@ export function mapStatusHistoryEntry(entry: ApiStatusHistoryEntry): TicketStatu
     toStatusName: entry.to_status.name,
     changedBy: `${entry.changed_by_user.first_name} ${entry.changed_by_user.last_name}`,
     changedAt: entry.changed_at,
+  };
+}
+
+export function mapTag(tag: ApiTag): Tag {
+  return { id: tag.id, label: tag.label };
+}
+
+export function mapSubtask(subtask: ApiSubtask): SubTask {
+  return { id: subtask.id, label: subtask.label, done: subtask.done };
+}
+
+export function mapLinkedTicket(link: ApiLinkedTicketRef): LinkedTicketRef {
+  return {
+    id: link.id,
+    reference: link.ticket_number,
+    title: link.title,
+    statusCode: link.status.code as TicketStatusCode,
+    statusName: link.status.name,
   };
 }
 
@@ -146,12 +170,13 @@ export function mapTicket(apiTicket: ApiTicket): Ticket {
     lastActivityAt,
     lastActivityPreview,
     lastActivityAuthor,
-    tags: [],
+    tags: (apiTicket.tags ?? []).map(mapTag),
     watchersCount: 0,
     messages: (apiTicket.comments ?? []).map(mapComment),
     statusHistory: (apiTicket.status_history ?? []).map(mapStatusHistoryEntry),
-    subTasks: [],
-    linkedTicketIds: [],
+    subTasks: (apiTicket.subtasks ?? []).map(mapSubtask),
+    links: (apiTicket.links ?? []).map(mapLinkedTicket),
+    customFields: apiTicket.custom_fields ?? {},
     attachments: (apiTicket.attachments ?? []).map(mapAttachment),
   };
 }

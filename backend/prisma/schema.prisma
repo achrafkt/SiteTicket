@@ -167,6 +167,7 @@ model Ticket {
   due_date             DateTime?
   resolved_at          DateTime?
   closed_at            DateTime?
+  custom_fields        Json?
   created_at           DateTime              @default(now())
   updated_at           DateTime              @updatedAt
   project              Project               @relation(fields: [project_id], references: [id])
@@ -178,8 +179,46 @@ model Ticket {
   comments             TicketComment[]
   attachments          TicketAttachment[]
   status_history       TicketStatusHistory[]
+  tags                 TicketTag[]
+  subtasks             TicketSubtask[]
+  links_from           TicketLink[]          @relation("TicketLinkFrom")
+  links_to             TicketLink[]          @relation("TicketLinkTo")
 
   @@map("tickets")
+}
+
+model TicketTag {
+  id         String   @id @default(uuid()) @db.Uuid
+  ticket_id  String   @db.Uuid
+  label      String
+  created_at DateTime @default(now())
+  ticket     Ticket   @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+
+  @@unique([ticket_id, label])
+  @@map("ticket_tags")
+}
+
+model TicketSubtask {
+  id         String   @id @default(uuid()) @db.Uuid
+  ticket_id  String   @db.Uuid
+  label      String
+  done       Boolean  @default(false)
+  created_at DateTime @default(now())
+  ticket     Ticket   @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+
+  @@map("ticket_subtasks")
+}
+
+model TicketLink {
+  id               String   @id @default(uuid()) @db.Uuid
+  ticket_id        String   @db.Uuid
+  linked_ticket_id String   @db.Uuid
+  created_at       DateTime @default(now())
+  ticket           Ticket   @relation("TicketLinkFrom", fields: [ticket_id], references: [id], onDelete: Cascade)
+  linked_ticket    Ticket   @relation("TicketLinkTo", fields: [linked_ticket_id], references: [id], onDelete: Cascade)
+
+  @@unique([ticket_id, linked_ticket_id])
+  @@map("ticket_links")
 }
 
 model TicketComment {
