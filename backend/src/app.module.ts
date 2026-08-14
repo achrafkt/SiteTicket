@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
 import { HealthModule } from './health/health.module';
+import { KnowledgeModule } from './knowledge/knowledge.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProjectsModule } from './projects/projects.module';
 import { RolesModule } from './roles/roles.module';
@@ -20,6 +21,7 @@ import { UsersModule } from './users/users.module';
     ProjectsModule,
     RolesModule,
     TicketsModule,
+    KnowledgeModule,
   ],
 })
 export class AppModule {}

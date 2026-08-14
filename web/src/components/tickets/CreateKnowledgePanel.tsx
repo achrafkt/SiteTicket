@@ -1,24 +1,131 @@
 'use client';
 
-import { useState } from 'react';
-import { ArrowLeft, Plus } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ArrowLeft, RefreshCw } from 'lucide-react';
 import { useTicketStore } from '@/store/ticket-store';
+import { ApiError } from '@/lib/api';
+import { stripHtmlToText } from '@/lib/html-text';
+import { createKnowledgeArticle, getKnowledgeCategories } from '@/lib/knowledge-api';
+import { mapKnowledgeCategory } from '@/lib/knowledge-mapper';
+import { canManageKnowledge } from '@/lib/knowledge-permissions';
+import { Dropdown } from './Dropdown';
 import type { Ticket } from '@/types/ticket';
+import type { KnowledgeCategory } from '@/types/knowledge';
+
+type Draft = {
+  title: string;
+  content: string;
+  categoryId: string;
+  validUntil: string;
+};
+
+function draftKey(ticketId: string): string {
+  return `kb-draft:${ticketId}`;
+}
+
+function loadDraft(ticketId: string): Draft | null {
+  try {
+    const raw = localStorage.getItem(draftKey(ticketId));
+    return raw ? (JSON.parse(raw) as Draft) : null;
+  } catch {
+    return null;
+  }
+}
 
 export function CreateKnowledgePanel({ ticket }: { ticket: Ticket }) {
+  const currentUser = useTicketStore((state) => state.currentUser);
   const toggleKnowledgePanel = useTicketStore((state) => state.toggleKnowledgePanel);
-  const [questions, setQuestions] = useState([ticket.title]);
-  const [answer, setAnswer] = useState('');
-  const [folder, setFolder] = useState('');
-  const [expiration, setExpiration] = useState('');
-  const [autocomplete, setAutocomplete] = useState(true);
+  const canManage = canManageKnowledge(currentUser);
 
-  function addQuestionVariant() {
-    setQuestions((current) => [...current, '']);
+  const draft = loadDraft(ticket.id);
+  const lastMessage = ticket.messages[ticket.messages.length - 1] ?? null;
+
+  const [categories, setCategories] = useState<KnowledgeCategory[]>([]);
+  const [title, setTitle] = useState(draft?.title ?? ticket.title);
+  const [content, setContent] = useState(draft?.content ?? (lastMessage ? stripHtmlToText(lastMessage.body) : ''));
+  const [categoryId, setCategoryId] = useState(draft?.categoryId ?? '');
+  const [validUntil, setValidUntil] = useState(draft?.validUntil ?? '');
+  const [isSaving, setIsSaving] = useState(false);
+  const [savedDraftAt, setSavedDraftAt] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!canManage) return;
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const data = await getKnowledgeCategories();
+        if (cancelled) return;
+        const mapped = data.map(mapKnowledgeCategory);
+        setCategories(mapped);
+        setCategoryId((current) => current || mapped[0]?.id || '');
+      } catch {
+        // best-effort: dropdown stays empty, submit stays disabled until retried
+      }
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [canManage]);
+
+  if (!canManage) {
+    return (
+      <aside className="flex h-full w-[320px] shrink-0 flex-col items-center justify-center gap-3 border-l border-gray-100 bg-white p-6 text-center">
+        <p className="text-sm text-gray-500">
+          Votre rôle ne permet pas de créer des articles dans la base de connaissances.
+        </p>
+        <button
+          type="button"
+          onClick={() => toggleKnowledgePanel(false)}
+          className="text-xs font-medium text-blue-600 hover:underline"
+        >
+          Retour
+        </button>
+      </aside>
+    );
   }
 
-  function updateQuestion(index: number, value: string) {
-    setQuestions((current) => current.map((question, i) => (i === index ? value : question)));
+  const canSubmit = categoryId.length > 0 && title.trim().length > 0 && content.trim().length > 0 && !isSaving;
+
+  function saveDraftLocally() {
+    try {
+      localStorage.setItem(draftKey(ticket.id), JSON.stringify({ title, content, categoryId, validUntil }));
+      setSavedDraftAt(Date.now());
+    } catch {
+      // best-effort: localStorage may be unavailable (private mode, quota)
+    }
+  }
+
+  function clearDraft() {
+    try {
+      localStorage.removeItem(draftKey(ticket.id));
+    } catch {
+      // best-effort
+    }
+  }
+
+  async function handleCreateArticle() {
+    if (!canSubmit) return;
+    setIsSaving(true);
+    setError(null);
+    try {
+      await createKnowledgeArticle({
+        categoryId,
+        title: title.trim(),
+        content: content.trim(),
+        validUntil: validUntil || undefined,
+        sourceTicketId: ticket.id,
+      });
+      clearDraft();
+      toggleKnowledgePanel(false);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Impossible de créer l'article.");
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   return (
@@ -35,38 +142,29 @@ export function CreateKnowledgePanel({ ticket }: { ticket: Ticket }) {
 
       <div className="helpdesk-scroll flex-1 space-y-4 overflow-y-auto p-4">
         <h2 className="text-base font-semibold text-gray-900">Créer une nouvelle fiche</h2>
+        <p className="-mt-2 text-xs text-gray-400">
+          Pré-rempli à partir du ticket {ticket.reference} — relisez avant d&apos;enregistrer.
+        </p>
 
         <div>
           <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-            Nouvelle question *
+            Titre / question *
           </label>
-          <div className="space-y-2">
-            {questions.map((question, index) => (
-              <input
-                key={index}
-                value={question}
-                onChange={(event) => updateQuestion(index, event.target.value)}
-                className="w-full rounded-md border border-gray-200 px-2.5 py-1.5 text-sm focus:outline-none"
-              />
-            ))}
-          </div>
-          <button
-            type="button"
-            onClick={addQuestionVariant}
-            className="mt-1.5 flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
-          >
-            <Plus size={12} /> Ajouter une variante
-          </button>
+          <input
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            className="w-full rounded-md border border-gray-200 px-2.5 py-1.5 text-sm focus:outline-none"
+          />
         </div>
 
         <div>
           <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-            Nouvelle réponse *
+            Réponse *
           </label>
           <textarea
-            value={answer}
-            onChange={(event) => setAnswer(event.target.value)}
-            rows={5}
+            value={content}
+            onChange={(event) => setContent(event.target.value)}
+            rows={8}
             className="w-full rounded-md border border-gray-200 px-2.5 py-1.5 text-sm focus:outline-none"
           />
           <p className="mt-1 text-[11px] text-gray-400">
@@ -76,19 +174,14 @@ export function CreateKnowledgePanel({ ticket }: { ticket: Ticket }) {
 
         <div>
           <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wider text-gray-400">
-            Enregistrer dans *
+            Catégorie *
           </label>
-          <select
-            value={folder}
-            onChange={(event) => setFolder(event.target.value)}
-            className="w-full rounded-md border border-gray-200 px-2.5 py-1.5 text-sm focus:outline-none"
-          >
-            <option value="">Sélectionner une catégorie</option>
-            <option value="rfi">RFI &amp; clarifications techniques</option>
-            <option value="reserves">Réserves &amp; punch list</option>
-            <option value="qse">Sécurité / QSE</option>
-            <option value="administratif">Administratif &amp; contractuel</option>
-          </select>
+          <Dropdown
+            value={categoryId}
+            onChange={setCategoryId}
+            placeholder="Sélectionner une catégorie"
+            options={categories.map((category) => ({ value: category.id, label: category.name }))}
+          />
         </div>
 
         <div>
@@ -97,41 +190,34 @@ export function CreateKnowledgePanel({ ticket }: { ticket: Ticket }) {
           </label>
           <input
             type="date"
-            value={expiration}
-            onChange={(event) => setExpiration(event.target.value)}
+            value={validUntil}
+            onChange={(event) => setValidUntil(event.target.value)}
             className="w-full rounded-md border border-gray-200 px-2.5 py-1.5 text-sm focus:outline-none"
           />
         </div>
-
-        <div className="flex items-center justify-between rounded-md border border-gray-100 px-3 py-2">
-          <span className="text-sm text-gray-700">Autocomplétion</span>
-          <button
-            type="button"
-            onClick={() => setAutocomplete((value) => !value)}
-            className={`h-5 w-9 rounded-full transition-colors ${autocomplete ? 'bg-blue-600' : 'bg-gray-200'}`}
-          >
-            <span
-              className={`block h-4 w-4 rounded-full bg-white transition-transform ${
-                autocomplete ? 'translate-x-4' : 'translate-x-0.5'
-              }`}
-            />
-          </button>
-        </div>
       </div>
 
-      <div className="flex items-center gap-2 border-t border-gray-100 p-3">
-        <button
-          type="button"
-          className="flex-1 rounded-md border border-gray-200 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
-        >
-          Enregistrer en brouillon local
-        </button>
-        <button
-          type="button"
-          className="flex-1 rounded-md bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          Enregistrer dans la BDC
-        </button>
+      <div className="border-t border-gray-100 p-3">
+        {error ? <p className="mb-2 rounded-md bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p> : null}
+        {savedDraftAt ? <p className="mb-2 text-xs text-emerald-600">Brouillon enregistré localement.</p> : null}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={saveDraftLocally}
+            className="flex-1 rounded-md border border-gray-200 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+          >
+            Enregistrer en brouillon local
+          </button>
+          <button
+            type="button"
+            onClick={handleCreateArticle}
+            disabled={!canSubmit}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-blue-600 py-2 text-sm font-medium text-white disabled:bg-gray-200 disabled:text-gray-400"
+          >
+            {isSaving ? <RefreshCw size={14} className="animate-spin" /> : null}
+            Enregistrer dans la BDC
+          </button>
+        </div>
       </div>
     </aside>
   );
