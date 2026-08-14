@@ -8,8 +8,8 @@ import {
   Building2,
   LayoutGrid,
   BarChart3,
-  Settings,
 } from 'lucide-react';
+import { SettingsMenu } from './SettingsMenu';
 
 const NAV_ITEMS = [
   { key: 'inbox', label: 'Tickets', icon: Inbox, href: '/helpdesk' },
@@ -53,13 +53,7 @@ export function NavRail() {
         })}
       </div>
 
-      <button
-        type="button"
-        title="Réglages"
-        className="flex h-11 w-11 items-center justify-center rounded-lg text-slate-300 hover:bg-nav-bg-active/60 hover:text-white"
-      >
-        <Settings size={20} strokeWidth={1.75} />
-      </button>
+      <SettingsMenu />
     </nav>
   );
 }

@@ -14,6 +14,7 @@ import {
   mapType,
 } from '@/lib/ticket-mapper';
 import { isTicketOverdue } from '@/lib/ticket-rules';
+import { buildMockNotifications } from '@/lib/notifications-mock';
 import {
   addTicketLink as addTicketLinkRequest,
   addTicketSubtask as addTicketSubtaskRequest,
@@ -48,6 +49,7 @@ import type {
   TicketStatus,
   TicketType,
 } from '@/types/ticket';
+import type { Notification } from '@/types/notification';
 
 export type ViewKey =
   | 'my_tickets'
@@ -78,6 +80,7 @@ type TicketStoreState = {
   activeView: ViewKey;
   activeTicketId: string | null;
   searchTerm: string;
+  notifications: Notification[];
   isKnowledgePanelOpen: boolean;
   isDetailsPanelOpen: boolean;
   viewsSidebarWidth: number;
@@ -101,6 +104,8 @@ type TicketStoreState = {
   setActiveView: (view: ViewKey) => void;
   setActiveTicketId: (id: string | null) => void;
   setSearchTerm: (term: string) => void;
+  markNotificationRead: (id: string) => void;
+  markAllNotificationsRead: () => void;
   updateTicketStatus: (id: string, statusId: string) => Promise<void>;
   updateTicketPriority: (id: string, priority: TicketPriority) => Promise<void>;
   assignTicketToUser: (id: string, userId: string | null) => Promise<void>;
@@ -175,6 +180,7 @@ function sessionInitialState(user: Person | null) {
     activeView: 'all_tickets' as ViewKey,
     activeTicketId: null,
     searchTerm: '',
+    notifications: [] as Notification[],
     isKnowledgePanelOpen: false,
     isDetailsPanelOpen: true,
     viewsSidebarWidth: VIEWS_SIDEBAR_DEFAULT_WIDTH,
@@ -250,6 +256,7 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
           types: apiTypes.map(mapType),
           projects: apiProjects.map(mapProject),
           users: apiUsers.map(mapPerson),
+          notifications: buildMockNotifications(tickets),
           isLoading: false,
         });
         get().setActiveTicketId(tickets[0]?.id ?? null);
@@ -271,6 +278,18 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
     },
 
     setSearchTerm: (term) => set({ searchTerm: term }),
+
+    markNotificationRead: (id) =>
+      set((state) => ({
+        notifications: state.notifications.map((notification) =>
+          notification.id === id ? { ...notification, read: true } : notification,
+        ),
+      })),
+
+    markAllNotificationsRead: () =>
+      set((state) => ({
+        notifications: state.notifications.map((notification) => ({ ...notification, read: true })),
+      })),
 
     updateTicketStatus: async (id, statusId) => {
       const status = get().statuses.find((candidate) => candidate.id === statusId);
