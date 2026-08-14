@@ -617,7 +617,7 @@ export function TicketDetailsPanel({ ticket }: { ticket: Ticket }) {
 
         <CollapsibleSection title="Tickets liés" count={ticket.links.length}>
           <LinkedTicketsEditor ticket={ticket} disabled={!permissionGuard.canModify} />
-        </CollapsibleSection>
+         </CollapsibleSection>
 
         <CollapsibleSection title="Pièces jointes" count={ticket.attachments.length}>
           {ticket.attachments.length === 0 ? (
