@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { Search, ChevronDown, HelpCircle, Bell, Plus } from "lucide-react";
+import { Search, ChevronDown, Plus } from "lucide-react";
 import {
   FileQuestion,
   ClipboardList,
@@ -18,6 +18,8 @@ import { useTicketStore } from "@/store/ticket-store";
 import { clearStoredUser } from "@/lib/current-user";
 import type { TicketTypeCode } from "@/types/ticket";
 import { Avatar } from "./Avatar";
+import { HelpMenu } from "./HelpMenu";
+import { NotificationsMenu } from "./NotificationsMenu";
 
 const CREATE_OPTION_ICONS: Record<TicketTypeCode, React.ElementType> = {
   RFI: FileQuestion,
@@ -152,22 +154,9 @@ export function AppHeader() {
           ) : null}
         </div>
 
-        <button
-          type="button"
-          title="Aide"
-          className="flex h-9 w-9 items-center justify-center rounded-xl text-white/80 transition-colors duration-200 hover:bg-white/14 hover:text-white"
-        >
-          <HelpCircle size={18} strokeWidth={1.75} />
-        </button>
+        <HelpMenu />
 
-        <button
-          type="button"
-          title="Notifications"
-          className="relative flex h-9 w-9 items-center justify-center rounded-xl text-white/80 transition-colors duration-200 hover:bg-white/14 hover:text-white"
-        >
-          <Bell size={18} strokeWidth={1.75} />
-          <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-red-500" />
-        </button>
+        <NotificationsMenu />
 
         <div className="relative" ref={userRef}>
           <button
