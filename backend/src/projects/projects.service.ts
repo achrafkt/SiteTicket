@@ -4,8 +4,25 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { AddProjectMemberDto } from './dto/add-project-member.dto';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
+
+const projectMemberSelect = {
+  id: true,
+  role_on_project: true,
+  added_at: true,
+  user: {
+    select: {
+      id: true,
+      first_name: true,
+      last_name: true,
+      email: true,
+      avatar_url: true,
+      role: { select: { code: true, name: true } },
+    },
+  },
+} as const;
 
 @Injectable()
 export class ProjectsService {
@@ -14,12 +31,14 @@ export class ProjectsService {
   findAll() {
     return this.prisma.project.findMany({
       orderBy: [{ created_at: 'desc' }],
+      include: { _count: { select: { members: true } } },
     });
   }
 
   async findOne(id: string) {
     const project = await this.prisma.project.findUnique({
       where: { id },
+      include: { _count: { select: { members: true } } },
     });
 
     if (!project) {
@@ -50,6 +69,7 @@ export class ProjectsService {
         end_date_planned: this.toDate(createProjectDto.endDatePlanned),
         end_date_actual: this.toDate(createProjectDto.endDateActual),
       },
+      include: { _count: { select: { members: true } } },
     });
   }
 
@@ -82,12 +102,62 @@ export class ProjectsService {
         end_date_planned: this.toDate(updateProjectDto.endDatePlanned),
         end_date_actual: this.toDate(updateProjectDto.endDateActual),
       },
+      include: { _count: { select: { members: true } } },
     });
   }
 
   async remove(id: string) {
     await this.ensureProjectExists(id);
     await this.prisma.project.delete({ where: { id } });
+
+    return { success: true };
+  }
+
+  async findMembers(projectId: string) {
+    await this.ensureProjectExists(projectId);
+
+    return this.prisma.projectMember.findMany({
+      where: { project_id: projectId },
+      select: projectMemberSelect,
+      orderBy: { added_at: 'asc' },
+    });
+  }
+
+  async addMember(projectId: string, dto: AddProjectMemberDto) {
+    await this.ensureProjectExists(projectId);
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: dto.userId },
+      select: { id: true, role: { select: { code: true } } },
+    });
+
+    if (!user) {
+      throw new BadRequestException('Utilisateur introuvable.');
+    }
+
+    return this.prisma.projectMember.upsert({
+      where: { project_id_user_id: { project_id: projectId, user_id: dto.userId } },
+      update: { role_on_project: dto.roleOnProject ?? user.role.code },
+      create: {
+        project_id: projectId,
+        user_id: dto.userId,
+        role_on_project: dto.roleOnProject ?? user.role.code,
+      },
+      select: projectMemberSelect,
+    });
+  }
+
+  async removeMember(projectId: string, userId: string) {
+    const membership = await this.prisma.projectMember.findUnique({
+      where: { project_id_user_id: { project_id: projectId, user_id: userId } },
+      select: { id: true },
+    });
+
+    if (!membership) {
+      throw new NotFoundException('Ce membre ne fait pas partie du chantier.');
+    }
+
+    await this.prisma.projectMember.delete({ where: { id: membership.id } });
 
     return { success: true };
   }

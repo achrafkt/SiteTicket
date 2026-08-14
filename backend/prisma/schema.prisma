@@ -26,6 +26,12 @@ enum ProjectStatus {
   archive
 }
 
+enum ProjectTaskStatus {
+  todo
+  in_progress
+  done
+}
+
 enum TicketTypeCode {
   RFI
   PUNCH
@@ -75,6 +81,9 @@ model User {
   status_changes     TicketStatusHistory[] @relation("TicketStatusHistoryChangedBy")
   uploaded_plans     Plan[]                @relation("PlanUploadedBy")
   knowledge_articles KnowledgeArticle[]    @relation("KnowledgeArticleCreatedBy")
+  project_tasks_assigned ProjectTask[]     @relation("ProjectTaskAssignee")
+  project_tasks_created  ProjectTask[]     @relation("ProjectTaskCreatedBy")
+  project_expenses_logged ProjectExpense[] @relation("ProjectExpenseCreatedBy")
 
   @@map("users")
 }
@@ -95,7 +104,10 @@ model Project {
   code             String          @unique
   address          String?
   client_name      String?
+  description      String?
   status           ProjectStatus   @default(preparation)
+  progress_percent Int             @default(0)
+  budget_planned   Decimal?        @db.Decimal(14, 2)
   start_date       DateTime?
   end_date_planned DateTime?
   end_date_actual  DateTime?
@@ -103,8 +115,43 @@ model Project {
   members          ProjectMember[]
   tickets          Ticket[]
   plans            Plan[]
+  tasks            ProjectTask[]
+  expenses         ProjectExpense[]
 
   @@map("projects")
+}
+
+model ProjectTask {
+  id          String            @id @default(uuid()) @db.Uuid
+  project_id  String            @db.Uuid
+  title       String
+  description String?
+  status      ProjectTaskStatus @default(todo)
+  due_date    DateTime?
+  assignee_id String?           @db.Uuid
+  created_by  String            @db.Uuid
+  created_at  DateTime          @default(now())
+  updated_at  DateTime          @updatedAt
+  project     Project           @relation(fields: [project_id], references: [id])
+  assignee    User?             @relation("ProjectTaskAssignee", fields: [assignee_id], references: [id])
+  creator     User              @relation("ProjectTaskCreatedBy", fields: [created_by], references: [id])
+
+  @@map("project_tasks")
+}
+
+model ProjectExpense {
+  id           String   @id @default(uuid()) @db.Uuid
+  project_id   String   @db.Uuid
+  label        String
+  amount       Decimal  @db.Decimal(14, 2)
+  category     String?
+  expense_date DateTime @default(now())
+  created_by   String   @db.Uuid
+  created_at   DateTime @default(now())
+  project      Project  @relation(fields: [project_id], references: [id])
+  creator      User     @relation("ProjectExpenseCreatedBy", fields: [created_by], references: [id])
+
+  @@map("project_expenses")
 }
 
 model ProjectMember {

@@ -1,25 +1,21 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Plus, RefreshCw } from 'lucide-react';
+import { Plus, RefreshCw, Users } from 'lucide-react';
 import { Dropdown } from '@/components/tickets/Dropdown';
 import { CreateProjectPanel } from '@/components/settings/CreateProjectPanel';
+import { ProjectMembersPanel } from '@/components/settings/ProjectMembersPanel';
 import { ApiError } from '@/lib/api';
 import {
   getAdminProjects,
+  PROJECT_STATUS_ICONS,
+  PROJECT_STATUS_ICON_BG_CLASSES,
+  PROJECT_STATUS_ICON_CLASSES,
   PROJECT_STATUS_LABELS,
   updateAdminProject,
   type ApiAdminProject,
   type ProjectStatusCode,
 } from '@/lib/admin-api';
-
-const STATUS_DOT_CLASSES: Record<ProjectStatusCode, string> = {
-  preparation: 'bg-amber-500',
-  actif: 'bg-emerald-500',
-  suspendu: 'bg-orange-500',
-  termine: 'bg-slate-400',
-  archive: 'bg-gray-400',
-};
 
 export default function ProjectsSettingsPage() {
   const [projects, setProjects] = useState<ApiAdminProject[]>([]);
@@ -27,6 +23,7 @@ export default function ProjectsSettingsPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
   const [isPanelOpen, setPanelOpen] = useState(false);
+  const [membersPanelProject, setMembersPanelProject] = useState<ApiAdminProject | null>(null);
 
   async function load() {
     setIsLoading(true);
@@ -104,34 +101,49 @@ export default function ProjectsSettingsPage() {
                 <th className="px-4 py-3">Nom</th>
                 <th className="px-4 py-3">Adresse / description</th>
                 <th className="px-4 py-3">Statut</th>
+                <th className="px-4 py-3">Membres</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {projects.map((project) => (
-                <tr key={project.id}>
-                  <td className="px-4 py-3 font-medium text-gray-800">{project.name}</td>
-                  <td className="max-w-xs truncate px-4 py-3 text-gray-600">
-                    {project.address ?? '—'}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Dropdown
-                      value={project.status}
-                      onChange={(value) => handleStatusChange(project.id, value as ProjectStatusCode)}
-                      options={(Object.keys(PROJECT_STATUS_LABELS) as ProjectStatusCode[]).map(
-                        (code) => ({
-                          value: code,
-                          label: PROJECT_STATUS_LABELS[code],
-                          dotClassName: STATUS_DOT_CLASSES[code],
-                        }),
-                      )}
-                      className="max-w-50"
-                    />
-                  </td>
-                </tr>
-              ))}
+              {projects.map((project) => {
+                return (
+                  <tr key={project.id}>
+                    <td className="px-4 py-3 font-medium text-gray-800">{project.name}</td>
+                    <td className="max-w-xs truncate px-4 py-3 text-gray-600">
+                      {project.address ?? '—'}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Dropdown
+                        value={project.status}
+                        onChange={(value) => handleStatusChange(project.id, value as ProjectStatusCode)}
+                        options={(Object.keys(PROJECT_STATUS_LABELS) as ProjectStatusCode[]).map(
+                          (code) => ({
+                            value: code,
+                            label: PROJECT_STATUS_LABELS[code],
+                            icon: PROJECT_STATUS_ICONS[code],
+                            iconClassName: PROJECT_STATUS_ICON_CLASSES[code],
+                            iconBgClassName: PROJECT_STATUS_ICON_BG_CLASSES[code],
+                          }),
+                        )}
+                        className="max-w-50"
+                      />
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        type="button"
+                        onClick={() => setMembersPanelProject(project)}
+                        className="flex items-center gap-1.5 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                      >
+                        <Users size={13} className="text-gray-400" />
+                        {project._count.members}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
               {projects.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="px-4 py-10 text-center text-sm text-gray-400">
+                  <td colSpan={4} className="px-4 py-10 text-center text-sm text-gray-400">
                     Aucun chantier.
                   </td>
                 </tr>
@@ -147,6 +159,23 @@ export default function ProjectsSettingsPage() {
           onCreated={(project) => {
             setProjects((current) => [project, ...current]);
             setPanelOpen(false);
+          }}
+        />
+      ) : null}
+
+      {membersPanelProject ? (
+        <ProjectMembersPanel
+          projectId={membersPanelProject.id}
+          projectName={membersPanelProject.name}
+          onClose={() => setMembersPanelProject(null)}
+          onMemberCountChange={(count) => {
+            setProjects((current) =>
+              current.map((project) =>
+                project.id === membersPanelProject.id
+                  ? { ...project, _count: { members: count } }
+                  : project,
+              ),
+            );
           }}
         />
       ) : null}

@@ -6,6 +6,9 @@ import { Dropdown } from '@/components/tickets/Dropdown';
 import { ApiError } from '@/lib/api';
 import {
   createAdminProject,
+  PROJECT_STATUS_ICON_BG_CLASSES,
+  PROJECT_STATUS_ICON_CLASSES,
+  PROJECT_STATUS_ICONS,
   PROJECT_STATUS_LABELS,
   type ApiAdminProject,
   type ProjectStatusCode,
@@ -110,6 +113,9 @@ export function CreateProjectPanel({ onClose, onCreated }: CreateProjectPanelPro
               options={(Object.keys(PROJECT_STATUS_LABELS) as ProjectStatusCode[]).map((code) => ({
                 value: code,
                 label: PROJECT_STATUS_LABELS[code],
+                icon: PROJECT_STATUS_ICONS[code],
+                iconClassName: PROJECT_STATUS_ICON_CLASSES[code],
+                iconBgClassName: PROJECT_STATUS_ICON_BG_CLASSES[code],
               }))}
             />
           </div>
