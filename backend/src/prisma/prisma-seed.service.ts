@@ -2,6 +2,7 @@ import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import {
   KnowledgeCategoryCode,
   ProjectStatus,
+  ProjectTaskStatus,
   RoleCode,
   TicketStatusCode,
   TicketTypeCode,
@@ -21,6 +22,8 @@ export class PrismaSeedService implements OnApplicationBootstrap {
     await this.seedAdminUser();
     await this.seedDemoTicket();
     await this.seedDemoKnowledgeArticles();
+    await this.seedDemoRoleUsers();
+    await this.seedDemoProjectHub();
   }
 
   private async seedRoles() {
@@ -252,12 +255,24 @@ export class PrismaSeedService implements OnApplicationBootstrap {
       update: {
         name: 'Demo Construction Project',
         status: ProjectStatus.actif,
+        address: '12 rue des Chantiers, 69000 Lyon',
+        description: 'Construction neuve — 48 logements collectifs R+4.',
+        progress_percent: 35,
+        budget_planned: 2_450_000,
+        start_date: new Date('2026-01-06'),
+        end_date_planned: new Date('2026-11-30'),
       },
       create: {
         name: 'Demo Construction Project',
         code: 'DEMO-001',
         client_name: 'Internal Demo Client',
+        address: '12 rue des Chantiers, 69000 Lyon',
+        description: 'Construction neuve — 48 logements collectifs R+4.',
         status: ProjectStatus.actif,
+        progress_percent: 35,
+        budget_planned: 2_450_000,
+        start_date: new Date('2026-01-06'),
+        end_date_planned: new Date('2026-11-30'),
       },
     });
   }
@@ -442,6 +457,144 @@ export class PrismaSeedService implements OnApplicationBootstrap {
           valid_until: article.valid_until,
           created_by: adminUser.id,
         },
+      });
+    }
+  }
+
+  // One demo account per role most concerned by the Projets/Chantiers
+  // module, so RBAC can be exercised by logging in as each of them without
+  // going through the admin user-creation screen first.
+  private async seedDemoRoleUsers() {
+    const password = process.env.DEMO_USER_PASSWORD ?? 'Demo1234!';
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const demoUsers = [
+      { role: RoleCode.moa, email: 'moa.demo@site-ticket.local', first_name: 'Marie', last_name: 'Owner (MOA)' },
+      { role: RoleCode.moe, email: 'moe.demo@site-ticket.local', first_name: 'Julien', last_name: 'Design (MOE)' },
+      {
+        role: RoleCode.conducteur_travaux,
+        email: 'conducteur.demo@site-ticket.local',
+        first_name: 'Karim',
+        last_name: 'Conducteur',
+      },
+      {
+        role: RoleCode.chef_chantier,
+        email: 'chef.demo@site-ticket.local',
+        first_name: 'Sophie',
+        last_name: 'Chef de chantier',
+      },
+    ];
+
+    const project = await this.prisma.project.findUnique({
+      where: { code: 'DEMO-001' },
+      select: { id: true },
+    });
+
+    for (const demoUser of demoUsers) {
+      const role = await this.prisma.role.findUnique({ where: { code: demoUser.role } });
+      if (!role) continue;
+
+      const user = await this.prisma.user.upsert({
+        where: { email: demoUser.email },
+        update: { role_id: role.id, first_name: demoUser.first_name, last_name: demoUser.last_name },
+        create: {
+          role_id: role.id,
+          first_name: demoUser.first_name,
+          last_name: demoUser.last_name,
+          email: demoUser.email,
+          password_hash: passwordHash,
+          is_active: true,
+        },
+      });
+
+      if (project) {
+        await this.prisma.projectMember.upsert({
+          where: { project_id_user_id: { project_id: project.id, user_id: user.id } },
+          update: {},
+          create: { project_id: project.id, user_id: user.id, role_on_project: demoUser.role },
+        });
+      }
+    }
+  }
+
+  private async seedDemoProjectHub() {
+    const project = await this.prisma.project.findUnique({
+      where: { code: 'DEMO-001' },
+      select: { id: true },
+    });
+    const adminUser = await this.prisma.user.findUnique({
+      where: { email: process.env.ADMIN_EMAIL ?? 'admin@site-ticket.local' },
+      select: { id: true },
+    });
+    const chefChantier = await this.prisma.user.findUnique({
+      where: { email: 'chef.demo@site-ticket.local' },
+      select: { id: true },
+    });
+
+    if (!project || !adminUser) {
+      return;
+    }
+
+    const existingTasks = await this.prisma.projectTask.count({ where: { project_id: project.id } });
+    if (existingTasks === 0) {
+      await this.prisma.projectTask.createMany({
+        data: [
+          {
+            project_id: project.id,
+            title: 'Coulage voile béton R+2 — zone escalier B',
+            description: 'Reprise après validation du bureau de contrôle sur la fissure signalée.',
+            status: ProjectTaskStatus.in_progress,
+            due_date: new Date('2026-08-22'),
+            assignee_id: chefChantier?.id,
+            created_by: adminUser.id,
+          },
+          {
+            project_id: project.id,
+            title: 'Réception livraison ferraillage R+3',
+            status: ProjectTaskStatus.todo,
+            due_date: new Date('2026-08-18'),
+            assignee_id: chefChantier?.id,
+            created_by: adminUser.id,
+          },
+          {
+            project_id: project.id,
+            title: 'Contrôle sécurité échafaudages façade nord',
+            status: ProjectTaskStatus.done,
+            created_by: adminUser.id,
+          },
+        ],
+      });
+    }
+
+    const existingExpenses = await this.prisma.projectExpense.count({ where: { project_id: project.id } });
+    if (existingExpenses === 0) {
+      await this.prisma.projectExpense.createMany({
+        data: [
+          {
+            project_id: project.id,
+            label: 'Location grue à tour — juillet',
+            amount: 18_500,
+            category: 'Location matériel',
+            expense_date: new Date('2026-07-31'),
+            created_by: adminUser.id,
+          },
+          {
+            project_id: project.id,
+            label: 'Livraison béton — lots R+1 à R+2',
+            amount: 64_200,
+            category: 'Matériaux',
+            expense_date: new Date('2026-08-05'),
+            created_by: adminUser.id,
+          },
+          {
+            project_id: project.id,
+            label: 'Main d’œuvre gros œuvre — juillet',
+            amount: 92_000,
+            category: 'Main d’œuvre',
+            expense_date: new Date('2026-07-31'),
+            created_by: adminUser.id,
+          },
+        ],
       });
     }
   }
