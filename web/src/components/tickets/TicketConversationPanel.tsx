@@ -25,6 +25,7 @@ import { useTicketStore } from '@/store/ticket-store';
 import { useTicketCollaboration } from '@/hooks/useTicketCollaboration';
 import { ALLOWED_ATTACHMENT_MIME_TYPES, MAX_ATTACHMENT_SIZE_BYTES } from '@/lib/tickets-api';
 import { canDeleteAttachment, canViewInternalComments } from '@/lib/ticket-permissions';
+import { canManageKnowledge } from '@/lib/knowledge-permissions';
 import { looksLikeRichTextHtml, stripHtmlToText } from '@/lib/html-text';
 import { sanitizeCommentHtmlForRender } from '@/lib/sanitize-comment-html';
 import { Avatar } from './Avatar';
@@ -187,6 +188,7 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
   const isDetailsPanelOpen = useTicketStore((state) => state.isDetailsPanelOpen);
 
   const canSeeInternalComments = canViewInternalComments(currentUser);
+  const canAddToKnowledge = canManageKnowledge(currentUser);
 
   const [tab, setTab] = useState<ReplyTab>('public');
   const [body, setBody] = useState('');
@@ -478,7 +480,7 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
       setBody('');
       setDraftSavedAt(null);
 
-      if (addToKnowledge) {
+      if (addToKnowledge && canAddToKnowledge) {
         toggleKnowledgePanel(true);
       }
     }
@@ -822,15 +824,19 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
           />
 
           <div className="flex items-center justify-between border-t border-gray-100 px-3 py-2">
-            <label className="flex items-center gap-1.5 text-xs text-gray-500">
-              <input
-                type="checkbox"
-                checked={addToKnowledge}
-                onChange={(event) => setAddToKnowledge(event.target.checked)}
-                className="h-3.5 w-3.5 rounded border-gray-300"
-              />
-              Ajouter à la base de connaissances
-            </label>
+            {canAddToKnowledge ? (
+              <label className="flex items-center gap-1.5 text-xs text-gray-500">
+                <input
+                  type="checkbox"
+                  checked={addToKnowledge}
+                  onChange={(event) => setAddToKnowledge(event.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-gray-300"
+                />
+                Ajouter à la base de connaissances
+              </label>
+            ) : (
+              <span />
+            )}
 
             <button
               type="button"

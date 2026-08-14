@@ -1,5 +1,6 @@
 import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import {
+  KnowledgeCategoryCode,
   ProjectStatus,
   RoleCode,
   TicketStatusCode,
@@ -16,8 +17,10 @@ export class PrismaSeedService implements OnApplicationBootstrap {
     await this.seedRoles();
     await this.seedTicketTypes();
     await this.seedTicketStatuses();
+    await this.seedKnowledgeCategories();
     await this.seedAdminUser();
     await this.seedDemoTicket();
+    await this.seedDemoKnowledgeArticles();
   }
 
   private async seedRoles() {
@@ -117,7 +120,12 @@ export class PrismaSeedService implements OnApplicationBootstrap {
 
   private async seedTicketStatuses() {
     const statuses = [
-      { code: TicketStatusCode.NEW, name: 'Nouveau', sort_order: 1, is_terminal: false },
+      {
+        code: TicketStatusCode.NEW,
+        name: 'Nouveau',
+        sort_order: 1,
+        is_terminal: false,
+      },
       {
         code: TicketStatusCode.ASSIGNED,
         name: 'Assigné',
@@ -165,6 +173,45 @@ export class PrismaSeedService implements OnApplicationBootstrap {
           is_terminal: status.is_terminal,
         },
         create: status,
+      });
+    }
+  }
+
+  private async seedKnowledgeCategories() {
+    const categories = [
+      {
+        code: KnowledgeCategoryCode.PROCEDURE,
+        name: 'Procédures',
+        sort_order: 1,
+      },
+      {
+        code: KnowledgeCategoryCode.SAFETY_SHEET,
+        name: 'Fiches sécurité',
+        sort_order: 2,
+      },
+      {
+        code: KnowledgeCategoryCode.TECHNICAL_STANDARD,
+        name: 'Normes techniques',
+        sort_order: 3,
+      },
+      {
+        code: KnowledgeCategoryCode.DOCUMENT_TEMPLATE,
+        name: 'Modèles de documents',
+        sort_order: 4,
+      },
+      {
+        code: KnowledgeCategoryCode.EQUIPMENT_SHEET,
+        name: 'Fiches matériel',
+        sort_order: 5,
+      },
+      { code: KnowledgeCategoryCode.FAQ, name: 'FAQ métier', sort_order: 6 },
+    ];
+
+    for (const category of categories) {
+      await this.prisma.knowledgeCategory.upsert({
+        where: { code: category.code },
+        update: { name: category.name, sort_order: category.sort_order },
+        create: category,
       });
     }
   }
@@ -285,5 +332,117 @@ export class PrismaSeedService implements OnApplicationBootstrap {
         is_internal: false,
       },
     });
+  }
+
+  private async seedDemoKnowledgeArticles() {
+    const adminUser = await this.prisma.user.findUnique({
+      where: { email: process.env.ADMIN_EMAIL ?? 'admin@site-ticket.local' },
+      select: { id: true },
+    });
+
+    if (!adminUser) {
+      return;
+    }
+
+    const categories = await this.prisma.knowledgeCategory.findMany({
+      select: { id: true, code: true },
+    });
+    const categoryId = (code: KnowledgeCategoryCode) =>
+      categories.find((category) => category.code === code)?.id;
+
+    const now = new Date();
+    const in15Days = new Date(now.getTime() + 15 * 24 * 60 * 60 * 1000);
+    const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+
+    const articles: Array<{
+      title: string;
+      categoryCode: KnowledgeCategoryCode;
+      content: string;
+      visible_roles: RoleCode[];
+      needs_review: boolean;
+      valid_until: Date | null;
+    }> = [
+      {
+        title: 'Procédure de réception de livraison béton',
+        categoryCode: KnowledgeCategoryCode.PROCEDURE,
+        content:
+          "1. Contrôler le bon de livraison (formulation, quantité, heure de départ centrale).\n2. Vérifier le délai de transport (max 90 min sauf retardateur de prise).\n3. Réaliser le cône d'Abrams si doute sur la consistance.\n4. Prélever les éprouvettes de contrôle si lot soumis à essai.\n5. Consigner la livraison dans le carnet de chantier.",
+        visible_roles: [],
+        needs_review: false,
+        valid_until: null,
+      },
+      {
+        title: 'Consignes port des EPI en zone chantier',
+        categoryCode: KnowledgeCategoryCode.SAFETY_SHEET,
+        content:
+          "Casque, chaussures de sécurité et gilet haute visibilité obligatoires sur l'ensemble de l'emprise chantier. Protection auditive et lunettes obligatoires en zone de découpe. Tout manquement constaté doit être signalé au QSE et fait l'objet d'un rappel immédiat.",
+        visible_roles: [],
+        needs_review: false,
+        valid_until: in15Days,
+      },
+      {
+        title: 'DTU 13.3 — Dallages, synthèse des points de vigilance',
+        categoryCode: KnowledgeCategoryCode.TECHNICAL_STANDARD,
+        content:
+          "Rappel des exigences du DTU 13.3 sur les dallages à usage industriel ou assimilé : épaisseur minimale, treillis soudé, joints de dilatation tous les 25 à 35 m², traitement de surface selon classe d'exposition. Se référer à la version en vigueur pour toute application contractuelle.",
+        visible_roles: [
+          RoleCode.admin,
+          RoleCode.conducteur_travaux,
+          RoleCode.moe,
+        ],
+        needs_review: false,
+        valid_until: oneYearAgo,
+      },
+      {
+        title: 'Modèle de PV de réception de travaux',
+        categoryCode: KnowledgeCategoryCode.DOCUMENT_TEMPLATE,
+        content:
+          'Trame standard à utiliser pour toute réception de travaux : identification du chantier et du lot, liste contradictoire des réserves, date de levée prévisionnelle, signatures MOA/MOE/entreprise. Joindre le fichier modèle à cet article.',
+        visible_roles: [],
+        needs_review: true,
+        valid_until: null,
+      },
+      {
+        title: 'Fiche VGP — Grue à tour',
+        categoryCode: KnowledgeCategoryCode.EQUIPMENT_SHEET,
+        content:
+          'La Vérification Générale Périodique (VGP) des grues à tour est due tous les 6 mois. Elle doit être réalisée par un organisme agréé et consignée dans le registre de sécurité. Toute grue dont la VGP est expirée doit être immobilisée immédiatement.',
+        visible_roles: [],
+        needs_review: false,
+        valid_until: now,
+      },
+      {
+        title: 'Qui valide un ordre de service ?',
+        categoryCode: KnowledgeCategoryCode.FAQ,
+        content:
+          "Un ordre de service est émis par la maîtrise d'œuvre (MOE) et notifié à l'entreprise concernée. Il doit être contresigné pour prise d'effet. En cas de désaccord, l'entreprise dispose d'un délai contractuel pour formuler ses réserves.",
+        visible_roles: [],
+        needs_review: false,
+        valid_until: null,
+      },
+    ];
+
+    for (const article of articles) {
+      const catId = categoryId(article.categoryCode);
+      if (!catId) continue;
+
+      const existing = await this.prisma.knowledgeArticle.findFirst({
+        where: { title: article.title },
+        select: { id: true },
+      });
+      if (existing) continue;
+
+      await this.prisma.knowledgeArticle.create({
+        data: {
+          category_id: catId,
+          title: article.title,
+          content: article.content,
+          visible_roles: article.visible_roles,
+          needs_review: article.needs_review,
+          valid_until: article.valid_until,
+          created_by: adminUser.id,
+        },
+      });
+    }
   }
 }

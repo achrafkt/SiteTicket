@@ -23,13 +23,11 @@ export function ModuleShellLayout({ children }: { children: React.ReactNode }) {
   }, [mounted, currentUser, router]);
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-slate-100 font-sans">
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-slate-200 font-sans">
       <AppHeader />
       <div className="flex flex-1 overflow-hidden">
         <NavRail />
-        <div className="flex-1 overflow-y-auto rounded-t-[20px] bg-white">
-          {!mounted || !currentUser ? null : children}
-        </div>
+        <div className="flex-1 overflow-y-auto p-4">{!mounted || !currentUser ? null : children}</div>
       </div>
     </div>
   );

@@ -125,7 +125,7 @@ export function ViewsSidebar() {
     return (
       <aside
         style={{ width: effectiveWidth }}
-        className="relative flex h-full shrink-0 flex-col items-center border-r border-slate-200 bg-slate-100 py-4"
+        className="relative flex h-full shrink-0 flex-col items-center rounded-[20px] bg-slate-100 py-4"
       >
         <nav className="flex flex-col items-center gap-1.5">
           {PRIMARY_VIEWS.map((item) => {
@@ -174,7 +174,7 @@ export function ViewsSidebar() {
   return (
     <aside
       style={{ width: effectiveWidth }}
-      className="relative flex h-full shrink-0 flex-col border-r border-slate-200 bg-slate-100 p-4"
+      className="relative flex h-full shrink-0 flex-col rounded-[20px] bg-slate-100 p-4"
     >
       <div className="flex flex-col rounded-[20px] bg-[#f4f6f9] px-3 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/70">
         <button
