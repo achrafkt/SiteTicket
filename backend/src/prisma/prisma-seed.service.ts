@@ -1,9 +1,11 @@
 import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import {
   KnowledgeCategoryCode,
+  Prisma,
   ProjectStatus,
   ProjectTaskStatus,
   RoleCode,
+  TicketPriority,
   TicketStatusCode,
   TicketTypeCode,
 } from '@prisma/client';
@@ -20,10 +22,12 @@ export class PrismaSeedService implements OnApplicationBootstrap {
     await this.seedTicketStatuses();
     await this.seedKnowledgeCategories();
     await this.seedAdminUser();
+    await this.seedSecondDemoProject();
     await this.seedDemoTicket();
     await this.seedDemoKnowledgeArticles();
     await this.seedDemoRoleUsers();
     await this.seedDemoProjectHub();
+    await this.seedDemoAnalyticsTickets();
   }
 
   private async seedRoles() {
@@ -277,6 +281,75 @@ export class PrismaSeedService implements OnApplicationBootstrap {
     });
   }
 
+  // A 2nd chantier so per-chantier charts (répartition, budget) have more
+  // than one bar to compare, and so RBAC scoping can be exercised: chef de
+  // chantier/sous-traitant/qse are each attached to only one of the two.
+  private async seedSecondDemoProject() {
+    const project = await this.prisma.project.upsert({
+      where: { code: 'DEMO-002' },
+      update: {
+        name: 'Réhabilitation Îlot Sud',
+        status: ProjectStatus.actif,
+        address: '5 avenue des Ateliers, 69003 Lyon',
+        description: 'Réhabilitation lourde — bureaux et commerces en pied d’immeuble.',
+        progress_percent: 58,
+        budget_planned: 1_180_000,
+        start_date: new Date('2025-11-03'),
+        end_date_planned: new Date('2026-09-30'),
+      },
+      create: {
+        name: 'Réhabilitation Îlot Sud',
+        code: 'DEMO-002',
+        client_name: 'Foncière Sud Immo',
+        address: '5 avenue des Ateliers, 69003 Lyon',
+        description: 'Réhabilitation lourde — bureaux et commerces en pied d’immeuble.',
+        status: ProjectStatus.actif,
+        progress_percent: 58,
+        budget_planned: 1_180_000,
+        start_date: new Date('2025-11-03'),
+        end_date_planned: new Date('2026-09-30'),
+      },
+    });
+
+    const adminUser = await this.prisma.user.findUnique({
+      where: { email: process.env.ADMIN_EMAIL ?? 'admin@site-ticket.local' },
+      select: { id: true },
+    });
+    if (!adminUser) return;
+
+    const existingExpenses = await this.prisma.projectExpense.count({ where: { project_id: project.id } });
+    if (existingExpenses === 0) {
+      await this.prisma.projectExpense.createMany({
+        data: [
+          {
+            project_id: project.id,
+            label: 'Désamiantage plateau R+1',
+            amount: 47_500,
+            category: 'Travaux préparatoires',
+            expense_date: new Date('2026-06-12'),
+            created_by: adminUser.id,
+          },
+          {
+            project_id: project.id,
+            label: 'Location base vie chantier — S1 2026',
+            amount: 21_300,
+            category: 'Location matériel',
+            expense_date: new Date('2026-07-20'),
+            created_by: adminUser.id,
+          },
+          {
+            project_id: project.id,
+            label: 'Menuiseries extérieures — façade rue',
+            amount: 138_900,
+            category: 'Matériaux',
+            expense_date: new Date('2026-08-01'),
+            created_by: adminUser.id,
+          },
+        ],
+      });
+    }
+  }
+
   private async seedDemoTicket() {
     const ticketNumber = 'TKT-DEMO-0001';
 
@@ -461,34 +534,63 @@ export class PrismaSeedService implements OnApplicationBootstrap {
     }
   }
 
-  // One demo account per role most concerned by the Projets/Chantiers
-  // module, so RBAC can be exercised by logging in as each of them without
-  // going through the admin user-creation screen first.
+  // One demo account per role, so RBAC (project-hub budget visibility,
+  // ticket/analytics chantier scoping) can be exercised by logging in as
+  // each of them without going through the admin user-creation screen first.
+  // Membership is deliberately split across the two demo chantiers: roles
+  // with broad view (moa/moe/conducteur_travaux) don't need it, but
+  // chef_chantier/sous_traitant/qse are each scoped to only one chantier so
+  // that "ne voit que son/ses chantier(s)" is actually testable, and
+  // observateur is on both to exercise the "restricted but multi-chantier" case.
   private async seedDemoRoleUsers() {
     const password = process.env.DEMO_USER_PASSWORD ?? 'Demo1234!';
     const passwordHash = await bcrypt.hash(password, 10);
 
     const demoUsers = [
-      { role: RoleCode.moa, email: 'moa.demo@site-ticket.local', first_name: 'Marie', last_name: 'Owner (MOA)' },
-      { role: RoleCode.moe, email: 'moe.demo@site-ticket.local', first_name: 'Julien', last_name: 'Design (MOE)' },
+      { role: RoleCode.moa, email: 'moa.demo@site-ticket.local', first_name: 'Marie', last_name: 'Owner (MOA)', projects: ['DEMO-001'] },
+      { role: RoleCode.moe, email: 'moe.demo@site-ticket.local', first_name: 'Julien', last_name: 'Design (MOE)', projects: ['DEMO-001'] },
       {
         role: RoleCode.conducteur_travaux,
         email: 'conducteur.demo@site-ticket.local',
         first_name: 'Karim',
         last_name: 'Conducteur',
+        projects: ['DEMO-001', 'DEMO-002'],
       },
       {
         role: RoleCode.chef_chantier,
         email: 'chef.demo@site-ticket.local',
         first_name: 'Sophie',
         last_name: 'Chef de chantier',
+        projects: ['DEMO-001'],
+      },
+      {
+        role: RoleCode.sous_traitant,
+        email: 'soustraitant.demo@site-ticket.local',
+        first_name: 'Yassine',
+        last_name: 'Sous-traitant',
+        projects: ['DEMO-001'],
+      },
+      {
+        role: RoleCode.qse,
+        email: 'qse.demo@site-ticket.local',
+        first_name: 'Nadia',
+        last_name: 'QSE',
+        projects: ['DEMO-002'],
+      },
+      {
+        role: RoleCode.observateur,
+        email: 'observateur.demo@site-ticket.local',
+        first_name: 'Paul',
+        last_name: 'Observateur',
+        projects: ['DEMO-001', 'DEMO-002'],
       },
     ];
 
-    const project = await this.prisma.project.findUnique({
-      where: { code: 'DEMO-001' },
-      select: { id: true },
+    const projects = await this.prisma.project.findMany({
+      where: { code: { in: ['DEMO-001', 'DEMO-002'] } },
+      select: { id: true, code: true },
     });
+    const projectByCode = new Map(projects.map((project) => [project.code, project.id]));
 
     for (const demoUser of demoUsers) {
       const role = await this.prisma.role.findUnique({ where: { code: demoUser.role } });
@@ -507,11 +609,14 @@ export class PrismaSeedService implements OnApplicationBootstrap {
         },
       });
 
-      if (project) {
+      for (const code of demoUser.projects) {
+        const projectId = projectByCode.get(code);
+        if (!projectId) continue;
+
         await this.prisma.projectMember.upsert({
-          where: { project_id_user_id: { project_id: project.id, user_id: user.id } },
+          where: { project_id_user_id: { project_id: projectId, user_id: user.id } },
           update: {},
-          create: { project_id: project.id, user_id: user.id, role_on_project: demoUser.role },
+          create: { project_id: projectId, user_id: user.id, role_on_project: demoUser.role },
         });
       }
     }
@@ -597,5 +702,213 @@ export class PrismaSeedService implements OnApplicationBootstrap {
         ],
       });
     }
+  }
+
+  // Enough varied ticket history (both chantiers, all types/statuses/
+  // priorities, ~5 months of created_at spread, plausible resolution times)
+  // for the Analytics dashboard's charts to show real signal instead of
+  // near-empty demo data. Idempotent via the TKT-ANLY- ticket_number prefix.
+  private async seedDemoAnalyticsTickets() {
+    const TICKET_NUMBER_PREFIX = 'TKT-ANLY-';
+    const existingCount = await this.prisma.ticket.count({
+      where: { ticket_number: { startsWith: TICKET_NUMBER_PREFIX } },
+    });
+    if (existingCount > 0) return;
+
+    const projects = await this.prisma.project.findMany({
+      where: { code: { in: ['DEMO-001', 'DEMO-002'] } },
+      select: { id: true, code: true },
+    });
+    const ticketTypes = await this.prisma.ticketType.findMany({ select: { id: true, code: true } });
+    const statuses = await this.prisma.ticketStatus.findMany({ select: { id: true, code: true } });
+    const adminUser = await this.prisma.user.findUnique({
+      where: { email: process.env.ADMIN_EMAIL ?? 'admin@site-ticket.local' },
+      select: { id: true },
+    });
+
+    if (!adminUser || projects.length === 0 || ticketTypes.length === 0 || statuses.length === 0) {
+      return;
+    }
+
+    const assignableUsers = await this.prisma.user.findMany({
+      where: {
+        email: {
+          in: [
+            'chef.demo@site-ticket.local',
+            'soustraitant.demo@site-ticket.local',
+            'conducteur.demo@site-ticket.local',
+            'moe.demo@site-ticket.local',
+            'qse.demo@site-ticket.local',
+          ],
+        },
+      },
+      select: { id: true },
+    });
+    if (assignableUsers.length === 0) return;
+
+    const projectByCode = new Map(projects.map((project) => [project.code, project]));
+    const typeByCode = new Map(ticketTypes.map((type) => [type.code, type]));
+    const statusByCode = new Map(statuses.map((status) => [status.code, status]));
+
+    const TYPE_CYCLE: TicketTypeCode[] = [
+      TicketTypeCode.RFI,
+      TicketTypeCode.PUNCH,
+      TicketTypeCode.SAFETY,
+      TicketTypeCode.MAINTENANCE,
+      TicketTypeCode.FIELD_ISSUE,
+      TicketTypeCode.SUBMITTAL,
+      TicketTypeCode.CHANGE_ORDER,
+    ];
+
+    const RESOLUTION_HOURS_BY_TYPE: Record<TicketTypeCode, number> = {
+      [TicketTypeCode.SAFETY]: 14,
+      [TicketTypeCode.FIELD_ISSUE]: 36,
+      [TicketTypeCode.PUNCH]: 60,
+      [TicketTypeCode.MAINTENANCE]: 40,
+      [TicketTypeCode.RFI]: 80,
+      [TicketTypeCode.SUBMITTAL]: 130,
+      [TicketTypeCode.CHANGE_ORDER]: 190,
+    };
+
+    const DUE_DAYS_BY_TYPE: Record<TicketTypeCode, number> = {
+      [TicketTypeCode.SAFETY]: 3,
+      [TicketTypeCode.FIELD_ISSUE]: 5,
+      [TicketTypeCode.PUNCH]: 10,
+      [TicketTypeCode.MAINTENANCE]: 7,
+      [TicketTypeCode.RFI]: 14,
+      [TicketTypeCode.SUBMITTAL]: 21,
+      [TicketTypeCode.CHANGE_ORDER]: 30,
+    };
+
+    const TITLES_BY_TYPE: Record<TicketTypeCode, string[]> = {
+      [TicketTypeCode.RFI]: [
+        "Précision attendue sur détail d'étanchéité",
+        'Question sur calepinage carrelage hall',
+        'Clarification cotes plan de coffrage',
+      ],
+      [TicketTypeCode.PUNCH]: [
+        'Reprise peinture cage escalier',
+        'Finition joint carrelage sanitaires',
+        "Défaut d'aplomb cloison bureau",
+      ],
+      [TicketTypeCode.CHANGE_ORDER]: [
+        'Modification tracé réseau CVC',
+        'Ajout prise réseau salle serveur',
+        'Changement revêtement sol accueil',
+      ],
+      [TicketTypeCode.SAFETY]: [
+        'Garde-corps manquant trémie',
+        'Stockage produits inflammables non conforme',
+        'Absence de balisage zone de fouille',
+      ],
+      [TicketTypeCode.MAINTENANCE]: [
+        'Panne compresseur base vie',
+        'Entretien nacelle élévatrice',
+        'Remplacement filtre groupe électrogène',
+      ],
+      [TicketTypeCode.SUBMITTAL]: [
+        'Fiche technique menuiseries alu à valider',
+        'Note de calcul structure à soumettre',
+        'Échantillon revêtement façade à approuver',
+      ],
+      [TicketTypeCode.FIELD_ISSUE]: [
+        'Infiltration eau sous-sol après pluie',
+        'Réseau existant non répertorié rencontré',
+        'Accès chantier bloqué par livraison voisine',
+      ],
+    };
+
+    const STATUS_CYCLE: TicketStatusCode[] = [
+      TicketStatusCode.CLOSED,
+      TicketStatusCode.RESOLVED,
+      TicketStatusCode.IN_PROGRESS,
+      TicketStatusCode.CLOSED,
+      TicketStatusCode.NEW,
+      TicketStatusCode.ASSIGNED,
+      TicketStatusCode.RESOLVED,
+      TicketStatusCode.PENDING,
+      TicketStatusCode.IN_PROGRESS,
+      TicketStatusCode.REOPENED,
+      TicketStatusCode.CLOSED,
+      TicketStatusCode.RESOLVED,
+    ];
+
+    const PRIORITY_CYCLE: TicketPriority[] = [
+      'medium',
+      'high',
+      'low',
+      'medium',
+      'critical',
+      'high',
+      'medium',
+      'low',
+    ];
+
+    const TRADES = ['Gros œuvre', 'Second œuvre', 'Électricité', 'Plomberie', 'Façade'];
+
+    const now = new Date();
+    const TOTAL_TICKETS = 50;
+    const ticketsData: Prisma.TicketCreateManyInput[] = [];
+
+    for (let i = 0; i < TOTAL_TICKETS; i += 1) {
+      const projectCode = i % 3 === 2 ? 'DEMO-002' : 'DEMO-001';
+      const project = projectByCode.get(projectCode);
+      const typeCode = TYPE_CYCLE[i % TYPE_CYCLE.length];
+      const type = typeByCode.get(typeCode);
+      if (!project || !type) continue;
+
+      const createdAt = new Date(now.getTime() - (150 - i * 3) * 24 * 60 * 60 * 1000);
+      createdAt.setHours(8 + (i % 9), (i * 7) % 60, 0, 0);
+
+      let statusCode = STATUS_CYCLE[i % STATUS_CYCLE.length];
+      const resolutionHours = RESOLUTION_HOURS_BY_TYPE[typeCode] + (i % 6) * 8;
+      let resolvedAt: Date | null = null;
+      let closedAt: Date | null = null;
+
+      if (statusCode === TicketStatusCode.RESOLVED || statusCode === TicketStatusCode.CLOSED) {
+        const candidateResolvedAt = new Date(createdAt.getTime() + resolutionHours * 60 * 60 * 1000);
+        if (candidateResolvedAt >= now) {
+          // Too recently created to plausibly already be resolved — keep it open instead.
+          statusCode = TicketStatusCode.IN_PROGRESS;
+        } else {
+          resolvedAt = candidateResolvedAt;
+          if (statusCode === TicketStatusCode.CLOSED) {
+            let candidateClosedAt = new Date(resolvedAt.getTime() + (24 + (i % 4) * 12) * 60 * 60 * 1000);
+            if (candidateClosedAt >= now) {
+              candidateClosedAt = new Date(now.getTime() - 60 * 60 * 1000);
+            }
+            closedAt = candidateClosedAt;
+          }
+        }
+      }
+
+      const status = statusByCode.get(statusCode);
+      if (!status) continue;
+
+      const dueDate = new Date(createdAt.getTime() + DUE_DAYS_BY_TYPE[typeCode] * 24 * 60 * 60 * 1000);
+      const priority = PRIORITY_CYCLE[i % PRIORITY_CYCLE.length];
+      const assignee = i % 6 === 5 ? null : assignableUsers[i % assignableUsers.length];
+      const titles = TITLES_BY_TYPE[typeCode];
+      const title = `${titles[i % titles.length]} — lot ${String((i % 12) + 1).padStart(2, '0')}`;
+
+      ticketsData.push({
+        ticket_number: `${TICKET_NUMBER_PREFIX}${String(i + 1).padStart(3, '0')}`,
+        project_id: project.id,
+        ticket_type_id: type.id,
+        status_id: status.id,
+        title,
+        priority,
+        location_zone: `LOT-${100 + (i % 12) * 4}`,
+        trade: TRADES[i % TRADES.length],
+        created_by: adminUser.id,
+        assigned_to: assignee?.id,
+        due_date: dueDate,
+        resolved_at: resolvedAt,
+        closed_at: closedAt,
+        created_at: createdAt,
+      });
+    }
+
+    await this.prisma.ticket.createMany({ data: ticketsData });
   }
 }
