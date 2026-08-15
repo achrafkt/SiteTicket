@@ -94,6 +94,7 @@ type TicketStoreState = {
   commentError: string | null;
   isCreatePanelOpen: boolean;
   createDraftTypeId: string | null;
+  createDraftStatusId: string | null;
   isCreatingTicket: boolean;
   createTicketError: string | null;
   isUploadingAttachment: boolean;
@@ -113,7 +114,7 @@ type TicketStoreState = {
   toggleDetailsPanel: (open?: boolean) => void;
   setViewsSidebarWidth: (width: number) => void;
   addComment: (ticketId: string, body: string, isInternal: boolean) => Promise<TicketMessage | null>;
-  openCreateTicketPanel: (typeId: string) => void;
+  openCreateTicketPanel: (typeId: string, statusId?: string) => void;
   closeCreateTicketPanel: () => void;
   createTicket: (payload: Omit<CreateTicketPayload, 'ticketTypeId'>) => Promise<Ticket | null>;
   deleteTicket: (id: string) => Promise<boolean>;
@@ -194,6 +195,7 @@ function sessionInitialState(user: Person | null) {
     commentError: null,
     isCreatePanelOpen: false,
     createDraftTypeId: null,
+    createDraftStatusId: null,
     isCreatingTicket: false,
     createTicketError: null,
     isUploadingAttachment: false,
@@ -398,15 +400,28 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
       }
     },
 
-    openCreateTicketPanel: (typeId) =>
-      set({ isCreatePanelOpen: true, createDraftTypeId: typeId, createTicketError: null }),
+    openCreateTicketPanel: (typeId, statusId) =>
+      set({
+        isCreatePanelOpen: true,
+        createDraftTypeId: typeId,
+        createDraftStatusId: statusId ?? null,
+        createTicketError: null,
+      }),
 
     closeCreateTicketPanel: () =>
-      set({ isCreatePanelOpen: false, createDraftTypeId: null, createTicketError: null }),
+      set({
+        isCreatePanelOpen: false,
+        createDraftTypeId: null,
+        createDraftStatusId: null,
+        createTicketError: null,
+      }),
 
     createTicket: async (payload) => {
       const typeId = get().createDraftTypeId;
       if (!typeId) return null;
+
+      // Captured before the panel-closing set() below wipes it.
+      const targetStatusId = get().createDraftStatusId;
 
       set({ isCreatingTicket: true, createTicketError: null });
       try {
@@ -417,12 +432,22 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
           isCreatingTicket: false,
           isCreatePanelOpen: false,
           createDraftTypeId: null,
+          createDraftStatusId: null,
         }));
         get().setActiveTicketId(ticket.id);
+
+        // The create endpoint has no statusId field, so a board column's "+"
+        // button lands the ticket in its default status first, then patches
+        // it into the target column via the existing status-update action.
+        if (targetStatusId && targetStatusId !== ticket.statusId) {
+          await get().updateTicketStatus(ticket.id, targetStatusId);
+        }
+
         return ticket;
       } catch (err) {
         set({
           isCreatingTicket: false,
+          createDraftStatusId: null,
           createTicketError: err instanceof ApiError ? err.message : 'Impossible de créer le ticket.',
         });
         return null;
