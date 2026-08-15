@@ -6,7 +6,7 @@ import { Avatar } from '@/components/tickets/Avatar';
 import { useTicketStore } from '@/store/ticket-store';
 import { mapPerson } from '@/lib/ticket-mapper';
 import { storeUser } from '@/lib/current-user';
-import { API_URL, ApiError } from '@/lib/api';
+import { ApiError, resolveAvatarUrl } from '@/lib/api';
 import {
   changePassword,
   getMe,
@@ -200,7 +200,7 @@ export default function ProfilePage() {
     );
   }
 
-  const displayAvatarUrl = avatarPreviewUrl ?? (profile.avatar_url ? `${API_URL}${profile.avatar_url}` : null);
+  const displayAvatarUrl = avatarPreviewUrl ?? resolveAvatarUrl(profile.avatar_url);
   const initials = `${profile.first_name[0] ?? ''}${profile.last_name[0] ?? ''}`.toUpperCase();
 
   return (

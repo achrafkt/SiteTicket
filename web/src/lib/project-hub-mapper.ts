@@ -1,4 +1,4 @@
-import { API_URL } from './api';
+import { resolveAvatarUrl } from './api';
 import type {
   ApiProjectHub,
   ApiProjectHubExpense,
@@ -17,7 +17,7 @@ function mapUserSummary(user: ApiProjectHubUserSummary): ProjectHubUserSummary {
     id: user.id,
     name: `${user.first_name} ${user.last_name}`,
     initials: `${user.first_name[0] ?? ''}${user.last_name[0] ?? ''}`.toUpperCase(),
-    avatarUrl: user.avatar_url ? `${API_URL}${user.avatar_url}` : null,
+    avatarUrl: resolveAvatarUrl(user.avatar_url),
   };
 }
 

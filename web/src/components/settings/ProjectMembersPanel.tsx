@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { Avatar } from '@/components/tickets/Avatar';
 import { Dropdown } from '@/components/tickets/Dropdown';
-import { API_URL, ApiError } from '@/lib/api';
+import { ApiError, resolveAvatarUrl } from '@/lib/api';
 import {
   addProjectMember,
   getAdminUsers,
@@ -151,7 +151,7 @@ export function ProjectMembersPanel({
                       >
                         <Avatar
                           initials={userInitials(member.user)}
-                          avatarUrl={member.user.avatar_url ? `${API_URL}${member.user.avatar_url}` : null}
+                          avatarUrl={resolveAvatarUrl(member.user.avatar_url)}
                         />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium text-gray-800">
@@ -187,7 +187,7 @@ export function ProjectMembersPanel({
                     label: `${user.first_name} ${user.last_name}`,
                     description: user.role.name,
                     initials: userInitials(user),
-                    avatarUrl: user.avatar_url ? `${API_URL}${user.avatar_url}` : null,
+                    avatarUrl: resolveAvatarUrl(user.avatar_url),
                   }))}
                 />
                 <input

@@ -1,4 +1,4 @@
-import { API_URL } from './api';
+import { API_URL, resolveAvatarUrl } from './api';
 import type { ApiKnowledgeArticle, ApiKnowledgeCategory } from './knowledge-api';
 import type { KnowledgeArticle, KnowledgeCategory } from '@/types/knowledge';
 
@@ -34,7 +34,7 @@ export function mapKnowledgeArticle(article: ApiKnowledgeArticle): KnowledgeArti
       id: article.author.id,
       name: `${article.author.first_name} ${article.author.last_name}`,
       initials: `${article.author.first_name[0] ?? ''}${article.author.last_name[0] ?? ''}`.toUpperCase(),
-      avatarUrl: article.author.avatar_url ? `${API_URL}${article.author.avatar_url}` : null,
+      avatarUrl: resolveAvatarUrl(article.author.avatar_url),
     },
     createdAt: article.created_at,
     updatedAt: article.updated_at,

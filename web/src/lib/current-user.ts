@@ -1,4 +1,4 @@
-import { API_URL } from './api';
+import { resolveAvatarUrl } from './api';
 import type { Person } from '@/types/ticket';
 
 const USER_KEY = 'site-ticket-user';
@@ -42,7 +42,7 @@ export function getStoredUser(): Person | null {
       name: `${user.first_name} ${user.last_name}`,
       initials: initialsOf(user.first_name, user.last_name),
       email: user.email,
-      avatarUrl: user.avatar_url ? `${API_URL}${user.avatar_url}` : null,
+      avatarUrl: resolveAvatarUrl(user.avatar_url),
       roleCode: user.role?.code ?? null,
       roleName: user.role?.name ?? null,
     };

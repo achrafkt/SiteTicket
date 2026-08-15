@@ -1,6 +1,15 @@
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 const TOKEN_KEY = 'site-ticket-token';
 
+// User-uploaded avatars are stored as backend-relative paths, but seeded/demo
+// avatars (DiceBear etc.) are already absolute URLs — prefixing those with
+// API_URL would produce a broken concatenated URL, so only relative paths
+// get the backend origin prepended.
+export function resolveAvatarUrl(avatarUrl: string | null | undefined): string | null {
+  if (!avatarUrl) return null;
+  return /^https?:\/\//i.test(avatarUrl) ? avatarUrl : `${API_URL}${avatarUrl}`;
+}
+
 export class ApiError extends Error {
   status: number;
 

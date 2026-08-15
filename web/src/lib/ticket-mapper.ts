@@ -1,4 +1,4 @@
-import { API_URL } from './api';
+import { API_URL, resolveAvatarUrl } from './api';
 import { stripHtmlToText, truncateText } from './html-text';
 import type {
   ApiAttachment,
@@ -36,7 +36,7 @@ export function mapPerson(user: ApiUserRef): Person {
     name: `${user.first_name} ${user.last_name}`,
     initials: `${user.first_name[0] ?? ''}${user.last_name[0] ?? ''}`.toUpperCase(),
     email: user.email,
-    avatarUrl: user.avatar_url ? `${API_URL}${user.avatar_url}` : null,
+    avatarUrl: resolveAvatarUrl(user.avatar_url),
     roleCode: user.role?.code ?? null,
     roleName: user.role?.name ?? null,
   };
@@ -59,7 +59,7 @@ export function mapComment(comment: ApiComment): TicketMessage {
     id: comment.id,
     authorName: `${comment.user.first_name} ${comment.user.last_name}`,
     authorInitials: `${comment.user.first_name[0] ?? ''}${comment.user.last_name[0] ?? ''}`.toUpperCase(),
-    authorAvatarUrl: comment.user.avatar_url ? `${API_URL}${comment.user.avatar_url}` : null,
+    authorAvatarUrl: resolveAvatarUrl(comment.user.avatar_url),
     isInternal: comment.is_internal,
     body: comment.comment_text,
     createdAt: comment.created_at,
