@@ -42,7 +42,10 @@ export class ProjectHubController {
   }
 
   @Post()
-  create(@Body() dto: CreateProjectHubDto, @CurrentUser() user: AuthenticatedUser) {
+  create(
+    @Body() dto: CreateProjectHubDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
     return this.projectHubService.create(dto, toActor(user));
   }
 
@@ -98,6 +101,14 @@ export class ProjectHubController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.projectHubService.removeTask(id, taskId, toActor(user));
+  }
+
+  @Get(':id/activity')
+  getActivityLog(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.projectHubService.getActivityLog(id, toActor(user));
   }
 
   @Get(':id/expenses')

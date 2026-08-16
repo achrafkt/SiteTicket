@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ProjectActivityAction } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AddProjectMemberDto } from './dto/add-project-member.dto';
 import { CreateProjectDto } from './dto/create-project.dto';
@@ -22,6 +23,13 @@ const projectMemberSelect = {
       role: { select: { code: true, name: true } },
     },
   },
+} as const;
+
+const memberUserNameSelect = {
+  id: true,
+  first_name: true,
+  last_name: true,
+  role: { select: { code: true } },
 } as const;
 
 @Injectable()
@@ -123,34 +131,71 @@ export class ProjectsService {
     });
   }
 
-  async addMember(projectId: string, dto: AddProjectMemberDto) {
+  async addMember(
+    projectId: string,
+    dto: AddProjectMemberDto,
+    actorId: string,
+  ) {
     await this.ensureProjectExists(projectId);
 
     const user = await this.prisma.user.findUnique({
       where: { id: dto.userId },
-      select: { id: true, role: { select: { code: true } } },
+      select: memberUserNameSelect,
     });
 
     if (!user) {
       throw new BadRequestException('Utilisateur introuvable.');
     }
 
-    return this.prisma.projectMember.upsert({
-      where: { project_id_user_id: { project_id: projectId, user_id: dto.userId } },
-      update: { role_on_project: dto.roleOnProject ?? user.role.code },
+    const existingMembership = await this.prisma.projectMember.findUnique({
+      where: {
+        project_id_user_id: { project_id: projectId, user_id: dto.userId },
+      },
+      select: { role_on_project: true },
+    });
+
+    const newRole = dto.roleOnProject ?? user.role.code;
+    const userName = `${user.first_name} ${user.last_name}`;
+
+    const member = await this.prisma.projectMember.upsert({
+      where: {
+        project_id_user_id: { project_id: projectId, user_id: dto.userId },
+      },
+      update: { role_on_project: newRole },
       create: {
         project_id: projectId,
         user_id: dto.userId,
-        role_on_project: dto.roleOnProject ?? user.role.code,
+        role_on_project: newRole,
       },
       select: projectMemberSelect,
     });
+
+    if (!existingMembership) {
+      await this.logActivity(
+        projectId,
+        actorId,
+        'member_added',
+        `Membre ajouté : ${userName} (${newRole})`,
+      );
+    } else if (existingMembership.role_on_project !== newRole) {
+      await this.logActivity(
+        projectId,
+        actorId,
+        'member_role_updated',
+        `Rôle modifié pour ${userName} : ${existingMembership.role_on_project ?? '—'} → ${newRole}`,
+      );
+    }
+
+    return member;
   }
 
-  async removeMember(projectId: string, userId: string) {
+  async removeMember(projectId: string, userId: string, actorId: string) {
     const membership = await this.prisma.projectMember.findUnique({
       where: { project_id_user_id: { project_id: projectId, user_id: userId } },
-      select: { id: true },
+      select: {
+        id: true,
+        user: { select: { first_name: true, last_name: true } },
+      },
     });
 
     if (!membership) {
@@ -159,7 +204,25 @@ export class ProjectsService {
 
     await this.prisma.projectMember.delete({ where: { id: membership.id } });
 
+    await this.logActivity(
+      projectId,
+      actorId,
+      'member_removed',
+      `Membre retiré : ${membership.user.first_name} ${membership.user.last_name}`,
+    );
+
     return { success: true };
+  }
+
+  private async logActivity(
+    projectId: string,
+    actorId: string,
+    action: ProjectActivityAction,
+    summary: string,
+  ) {
+    await this.prisma.projectActivityLogEntry.create({
+      data: { project_id: projectId, actor_id: actorId, action, summary },
+    });
   }
 
   private async ensureProjectExists(id: string) {

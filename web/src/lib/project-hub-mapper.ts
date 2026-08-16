@@ -1,11 +1,18 @@
 import { resolveAvatarUrl } from './api';
 import type {
+  ApiProjectActivityEntry,
   ApiProjectHub,
   ApiProjectHubExpense,
   ApiProjectHubTask,
   ApiProjectHubUserSummary,
 } from './project-hub-api';
-import type { ProjectHub, ProjectHubExpense, ProjectHubTask, ProjectHubUserSummary } from '@/types/project-hub';
+import type {
+  ProjectActivityEntry,
+  ProjectHub,
+  ProjectHubExpense,
+  ProjectHubTask,
+  ProjectHubUserSummary,
+} from '@/types/project-hub';
 
 function toNumberOrNull(value: string | number | null | undefined): number | null {
   if (value === null || value === undefined) return null;
@@ -44,6 +51,16 @@ export function mapProjectHubExpense(expense: ApiProjectHubExpense): ProjectHubE
     expenseDate: expense.expense_date,
     createdAt: expense.created_at,
     creator: mapUserSummary(expense.creator),
+  };
+}
+
+export function mapProjectActivityEntry(entry: ApiProjectActivityEntry): ProjectActivityEntry {
+  return {
+    id: entry.id,
+    action: entry.action,
+    summary: entry.summary,
+    createdAt: entry.created_at,
+    actor: mapUserSummary(entry.actor),
   };
 }
 

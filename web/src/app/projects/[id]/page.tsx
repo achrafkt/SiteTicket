@@ -18,6 +18,7 @@ import { ProjectStatusBadge } from '@/components/projects/ProjectStatusBadge';
 import { ProjectProgressControl } from '@/components/projects/ProjectProgressControl';
 import { ProjectTasksPanel } from '@/components/projects/ProjectTasksPanel';
 import { ProjectBudgetPanel } from '@/components/projects/ProjectBudgetPanel';
+import { ProjectActivityLog } from '@/components/projects/ProjectActivityLog';
 import { ProjectHubFormPanel } from '@/components/projects/ProjectHubFormPanel';
 import type { ProjectHub } from '@/types/project-hub';
 
@@ -181,6 +182,10 @@ export default function ProjectHubDetailPage() {
           />
         </SectionCard>
       ) : null}
+
+      <SectionCard title="Activité">
+        <ProjectActivityLog projectId={project.id} />
+      </SectionCard>
 
       {isEditPanelOpen ? (
         <ProjectHubFormPanel

@@ -30,6 +30,26 @@ export type ApiProjectHubExpense = {
   creator: ApiProjectHubUserSummary;
 };
 
+export type ApiProjectActivityAction =
+  | 'info_updated'
+  | 'budget_updated'
+  | 'task_created'
+  | 'task_updated'
+  | 'task_deleted'
+  | 'expense_created'
+  | 'expense_deleted'
+  | 'member_added'
+  | 'member_role_updated'
+  | 'member_removed';
+
+export type ApiProjectActivityEntry = {
+  id: string;
+  action: ApiProjectActivityAction;
+  summary: string;
+  created_at: string;
+  actor: ApiProjectHubUserSummary;
+};
+
 export type ApiProjectHub = {
   id: string;
   name: string;
@@ -149,4 +169,8 @@ export function deleteProjectExpense(projectId: string, expenseId: string) {
   return apiFetch<{ success: boolean }>(`/project-hub/${projectId}/expenses/${expenseId}`, {
     method: 'DELETE',
   });
+}
+
+export function getProjectActivityLog(projectId: string) {
+  return apiFetch<ApiProjectActivityEntry[]>(`/project-hub/${projectId}/activity`);
 }

@@ -32,6 +32,19 @@ enum ProjectTaskStatus {
   done
 }
 
+enum ProjectActivityAction {
+  info_updated
+  budget_updated
+  task_created
+  task_updated
+  task_deleted
+  expense_created
+  expense_deleted
+  member_added
+  member_role_updated
+  member_removed
+}
+
 enum TicketTypeCode {
   RFI
   PUNCH
@@ -84,6 +97,7 @@ model User {
   project_tasks_assigned ProjectTask[]     @relation("ProjectTaskAssignee")
   project_tasks_created  ProjectTask[]     @relation("ProjectTaskCreatedBy")
   project_expenses_logged ProjectExpense[] @relation("ProjectExpenseCreatedBy")
+  project_activity_logs ProjectActivityLogEntry[] @relation("ProjectActivityLogActor")
 
   @@map("users")
 }
@@ -117,6 +131,7 @@ model Project {
   plans            Plan[]
   tasks            ProjectTask[]
   expenses         ProjectExpense[]
+  activity_log     ProjectActivityLogEntry[]
 
   @@map("projects")
 }
@@ -165,6 +180,20 @@ model ProjectMember {
 
   @@unique([project_id, user_id])
   @@map("project_members")
+}
+
+model ProjectActivityLogEntry {
+  id         String                @id @default(uuid()) @db.Uuid
+  project_id String                @db.Uuid
+  action     ProjectActivityAction
+  summary    String
+  actor_id   String                @db.Uuid
+  created_at DateTime              @default(now())
+  project    Project               @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  actor      User                  @relation("ProjectActivityLogActor", fields: [actor_id], references: [id])
+
+  @@index([project_id, created_at])
+  @@map("project_activity_log")
 }
 
 model TicketType {

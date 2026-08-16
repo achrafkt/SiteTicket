@@ -31,6 +31,26 @@ export type ProjectHubExpense = {
   creator: ProjectHubUserSummary;
 };
 
+export type ProjectActivityAction =
+  | 'info_updated'
+  | 'budget_updated'
+  | 'task_created'
+  | 'task_updated'
+  | 'task_deleted'
+  | 'expense_created'
+  | 'expense_deleted'
+  | 'member_added'
+  | 'member_role_updated'
+  | 'member_removed';
+
+export type ProjectActivityEntry = {
+  id: string;
+  action: ProjectActivityAction;
+  summary: string;
+  createdAt: string;
+  actor: ProjectHubUserSummary;
+};
+
 export type ProjectHub = {
   id: string;
   name: string;

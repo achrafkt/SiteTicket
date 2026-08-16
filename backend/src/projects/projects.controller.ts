@@ -11,6 +11,8 @@ import {
 } from '@nestjs/common';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { AddProjectMemberDto } from './dto/add-project-member.dto';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
@@ -65,8 +67,9 @@ export class ProjectsController {
   addMember(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: AddProjectMemberDto,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.projectsService.addMember(id, dto);
+    return this.projectsService.addMember(id, dto, user.sub);
   }
 
   @UseGuards(RolesGuard)
@@ -75,7 +78,8 @@ export class ProjectsController {
   removeMember(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Param('userId', new ParseUUIDPipe()) userId: string,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.projectsService.removeMember(id, userId);
+    return this.projectsService.removeMember(id, userId, user.sub);
   }
 }
