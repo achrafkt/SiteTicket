@@ -11,3 +11,8 @@ export function formatWeekBucket(bucket: string): string {
 export function formatPercent(value: number): string {
   return `${value}%`;
 }
+
+export function formatDays(days: number): string {
+  const sign = days > 0 ? '+' : '';
+  return `${sign}${days} j`;
+}

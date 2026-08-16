@@ -31,3 +31,19 @@ export function isTicketOverdue(
 ): boolean {
   return getDueDateUrgency(dueDate, statusIsTerminal, now) === 'overdue';
 }
+
+/**
+ * Number of whole days between a ticket's due date and its actual
+ * resolution/closing date — positive when resolved late, zero or negative
+ * when on time or early. Returns null when there's no due date or the
+ * ticket hasn't been resolved/closed yet (i.e. no actual delay to report).
+ */
+export function getActualDelayDays(dueDate: string | null, resolutionDate: string | null): number | null {
+  if (!dueDate || !resolutionDate) return null;
+
+  const due = new Date(dueDate);
+  due.setHours(23, 59, 59, 999);
+  const resolved = new Date(resolutionDate);
+
+  return Math.ceil((resolved.getTime() - due.getTime()) / (24 * 60 * 60 * 1000));
+}

@@ -1,10 +1,12 @@
 'use client';
 
-import { Clock } from 'lucide-react';
+import { Clock, ShieldAlert } from 'lucide-react';
 import { TICKET_PRIORITY_LABELS, type Ticket } from '@/types/ticket';
 import { isTicketOverdue } from '@/lib/ticket-rules';
 import { AvatarStack } from './Avatar';
 import {
+  BLOCKING_BADGE_CLASSES,
+  EXTERNAL_PARTY_BADGE_CLASSES,
   PRIORITY_ICONS,
   PRIORITY_ICON_CLASSES,
   PRIORITY_ICON_BG_CLASSES,
@@ -80,6 +82,21 @@ export function TicketCard({ ticket, isSelected, isChecked, onSelect, onToggleCh
           {isTicketOverdue(ticket.dueDate, ticket.statusIsTerminal) ? (
             <span className="flex items-center gap-1 rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-600">
               <Clock size={11} /> En retard
+            </span>
+          ) : null}
+          {ticket.isBlocking ? (
+            <span
+              className={`flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${BLOCKING_BADGE_CLASSES}`}
+            >
+              <ShieldAlert size={11} /> Bloquant
+            </span>
+          ) : null}
+          {ticket.externalParty ? (
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${EXTERNAL_PARTY_BADGE_CLASSES}`}
+              title="Partie externe concernée"
+            >
+              {ticket.externalParty}
             </span>
           ) : null}
         </div>

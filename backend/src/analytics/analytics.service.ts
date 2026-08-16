@@ -17,6 +17,8 @@ type ScopedTicket = {
   closed_at: Date | null;
   due_date: Date | null;
   project_id: string;
+  cost_impact_amount: Prisma.Decimal | null;
+  schedule_impact_days: number | null;
   status: { code: string; name: string; sort_order: number; is_terminal: boolean };
   ticket_type: { code: string; name: string };
   assigned_to_user: { id: string; first_name: string; last_name: string } | null;
@@ -72,6 +74,8 @@ export class AnalyticsService {
         closed_at: true,
         due_date: true,
         project_id: true,
+        cost_impact_amount: true,
+        schedule_impact_days: true,
         status: { select: { code: true, name: true, sort_order: true, is_terminal: true } },
         ticket_type: { select: { code: true, name: true } },
         assigned_to_user: { select: { id: true, first_name: true, last_name: true } },
@@ -109,6 +113,9 @@ export class AnalyticsService {
     const budgetByProject = canSeeBudget
       ? await this.buildBudgetByProject(query.projectId ? [query.projectId] : visibleProjectIds)
       : null;
+    const impactByProject = canSeeBudget
+      ? this.buildImpactByProject(periodTickets, visibleProjects)
+      : null;
 
     return {
       visibleProjects,
@@ -121,6 +128,7 @@ export class AnalyticsService {
       byAssignee,
       byProject,
       budgetByProject,
+      impactByProject,
     };
   }
 
@@ -267,6 +275,28 @@ export class AnalyticsService {
         resolved: counts.get(project.id)?.resolved ?? 0,
       }))
       .filter((entry) => entry.open > 0 || entry.resolved > 0);
+  }
+
+  private buildImpactByProject(
+    tickets: ScopedTicket[],
+    visibleProjects: { id: string; name: string; code: string }[],
+  ) {
+    const totals = new Map<string, { costImpactTotal: number; scheduleImpactDaysTotal: number }>();
+    for (const ticket of tickets) {
+      const entry = totals.get(ticket.project_id) ?? { costImpactTotal: 0, scheduleImpactDaysTotal: 0 };
+      entry.costImpactTotal += ticket.cost_impact_amount ? Number(ticket.cost_impact_amount) : 0;
+      entry.scheduleImpactDaysTotal += ticket.schedule_impact_days ?? 0;
+      totals.set(ticket.project_id, entry);
+    }
+
+    return visibleProjects
+      .map((project) => ({
+        projectId: project.id,
+        projectName: project.name,
+        costImpactTotal: totals.get(project.id)?.costImpactTotal ?? 0,
+        scheduleImpactDaysTotal: totals.get(project.id)?.scheduleImpactDaysTotal ?? 0,
+      }))
+      .filter((entry) => entry.costImpactTotal !== 0 || entry.scheduleImpactDaysTotal !== 0);
   }
 
   private buildVolumeOverTime(tickets: ScopedTicket[], from: Date, to: Date) {

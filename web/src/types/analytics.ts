@@ -64,6 +64,13 @@ export type AnalyticsBudgetBucket = {
   variance: number | null;
 };
 
+export type AnalyticsImpactBucket = {
+  projectId: string;
+  projectName: string;
+  costImpactTotal: number;
+  scheduleImpactDaysTotal: number;
+};
+
 export type AnalyticsResponse = {
   visibleProjects: AnalyticsProjectRef[];
   kpis: AnalyticsKpis;
@@ -75,6 +82,7 @@ export type AnalyticsResponse = {
   byAssignee: AnalyticsAssigneeBucket[];
   byProject: AnalyticsProjectBucket[];
   budgetByProject: AnalyticsBudgetBucket[] | null;
+  impactByProject: AnalyticsImpactBucket[] | null;
 };
 
 export type AnalyticsQuery = {

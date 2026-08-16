@@ -50,4 +50,9 @@ export const BUDGET_SERIES_COLORS = {
   spent: '#2563eb',
 } as const;
 
+export const IMPACT_SERIES_COLORS = {
+  cost: '#dc2626',
+  schedule: '#d97706',
+} as const;
+
 export const NEUTRAL_SERIES_COLOR = '#3b82f6';

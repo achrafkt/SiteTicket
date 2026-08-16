@@ -1,9 +1,11 @@
-import { Clock } from 'lucide-react';
+import { Clock, ShieldAlert } from 'lucide-react';
 import { TICKET_PRIORITY_LABELS, type Ticket } from '@/types/ticket';
 import { getDueDateUrgency, isTicketOverdue } from '@/lib/ticket-rules';
 import { AvatarStack } from '@/components/tickets/Avatar';
 import {
+  BLOCKING_BADGE_CLASSES,
   DUE_DATE_TEXT_CLASSES,
+  EXTERNAL_PARTY_BADGE_CLASSES,
   PRIORITY_ICONS,
   PRIORITY_ICON_CLASSES,
   PRIORITY_ICON_BG_CLASSES,
@@ -28,6 +30,21 @@ export function KanbanCardContent({ ticket }: { ticket: Ticket }) {
         {ticket.lot ? (
           <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-slate-500">
             {ticket.lot}
+          </span>
+        ) : null}
+        {ticket.isBlocking ? (
+          <span
+            className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${BLOCKING_BADGE_CLASSES}`}
+          >
+            <ShieldAlert size={10} /> Bloquant
+          </span>
+        ) : null}
+        {ticket.externalParty ? (
+          <span
+            className={`truncate rounded-full px-2 py-0.5 text-[11px] font-medium ${EXTERNAL_PARTY_BADGE_CLASSES}`}
+            title="Partie externe concernée"
+          >
+            {ticket.externalParty}
           </span>
         ) : null}
       </div>

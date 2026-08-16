@@ -55,6 +55,7 @@ export function ProjectHubFormPanel({ project, onClose, onSaved }: ProjectHubFor
   );
   const [startDate, setStartDate] = useState(toDateInputValue(project?.startDate));
   const [endDatePlanned, setEndDatePlanned] = useState(toDateInputValue(project?.endDatePlanned));
+  const [endDateActual, setEndDateActual] = useState(toDateInputValue(project?.endDateActual));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -74,6 +75,7 @@ export function ProjectHubFormPanel({ project, onClose, onSaved }: ProjectHubFor
       budgetPlanned: budgetPlanned.trim() ? Number(budgetPlanned) : undefined,
       startDate: startDate || undefined,
       endDatePlanned: endDatePlanned || undefined,
+      endDateActual: endDateActual || undefined,
     };
 
     try {
@@ -199,6 +201,16 @@ export function ProjectHubFormPanel({ project, onClose, onSaved }: ProjectHubFor
                 className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-100"
               />
             </div>
+          </div>
+
+          <div>
+            <FieldLabel>Fin réelle</FieldLabel>
+            <input
+              type="date"
+              value={endDateActual}
+              onChange={(event) => setEndDateActual(event.target.value)}
+              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-100"
+            />
           </div>
         </div>
 

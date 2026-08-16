@@ -2,6 +2,8 @@ import {
   IsBoolean,
   IsDateString,
   IsEnum,
+  IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
@@ -36,6 +38,14 @@ export class UpdateTicketDto {
   @IsString()
   @IsOptional()
   externalParty?: string;
+
+  @IsNumber()
+  @IsOptional()
+  costImpactAmount?: number;
+
+  @IsInt()
+  @IsOptional()
+  scheduleImpactDays?: number;
 
   @IsDateString()
   @IsOptional()

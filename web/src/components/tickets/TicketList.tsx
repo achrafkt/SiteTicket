@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, SlidersHorizontal, ChevronDown, Check } from 'lucide-react';
+import { Search, ShieldAlert, SlidersHorizontal, ChevronDown, Check } from 'lucide-react';
 import {
   filterTicketsByView,
   useTicketStore,
@@ -48,6 +48,7 @@ export function TicketList() {
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [sortBy, setSortBy] = useState<SortKey>('recent');
   const [isSortMenuOpen, setSortMenuOpen] = useState(false);
+  const [blockingOnly, setBlockingOnly] = useState(false);
   const sortMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -74,7 +75,9 @@ export function TicketList() {
           );
         });
 
-    const sorted = [...bySearch];
+    const byBlocking = blockingOnly ? bySearch.filter((ticket) => ticket.isBlocking) : bySearch;
+
+    const sorted = [...byBlocking];
     if (sortBy === 'priority') {
       sorted.sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority]);
     } else if (sortBy === 'dueDate') {
@@ -87,7 +90,7 @@ export function TicketList() {
       sorted.sort((a, b) => new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime());
     }
     return sorted;
-  }, [tickets, activeView, searchTerm, sortBy, currentUserId]);
+  }, [tickets, activeView, searchTerm, sortBy, currentUserId, blockingOnly]);
 
   function toggleCheck(id: string) {
     setCheckedIds((current) => {
@@ -116,38 +119,51 @@ export function TicketList() {
             <ChevronDown size={15} />
           </button>
 
-          <div className="relative" ref={sortMenuRef}>
+          <div className="flex items-center gap-1">
             <button
               type="button"
-              title="Trier la liste"
-              onClick={() => setSortMenuOpen((value) => !value)}
-              className={`flex h-8 w-8 items-center justify-center rounded-lg hover:bg-gray-100 hover:text-gray-600 ${
-                isSortMenuOpen ? 'bg-gray-100 text-gray-600' : 'text-gray-400'
+              title="Bloquants uniquement"
+              aria-pressed={blockingOnly}
+              onClick={() => setBlockingOnly((value) => !value)}
+              className={`flex h-8 w-8 items-center justify-center rounded-lg ${
+                blockingOnly ? 'bg-red-100 text-red-700' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'
               }`}
             >
-              <SlidersHorizontal size={15} />
+              <ShieldAlert size={15} />
             </button>
-            {isSortMenuOpen ? (
-              <div className="absolute right-0 top-full z-10 mt-1.5 w-48 rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
-                <p className="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
-                  Trier par
-                </p>
-                {SORT_OPTIONS.map((option) => (
-                  <button
-                    key={option.key}
-                    type="button"
-                    onClick={() => {
-                      setSortBy(option.key);
-                      setSortMenuOpen(false);
-                    }}
-                    className="flex w-full items-center justify-between px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
-                  >
-                    {option.label}
-                    {sortBy === option.key ? <Check size={13} className="text-blue-600" /> : null}
-                  </button>
-                ))}
-              </div>
-            ) : null}
+            <div className="relative" ref={sortMenuRef}>
+              <button
+                type="button"
+                title="Trier la liste"
+                onClick={() => setSortMenuOpen((value) => !value)}
+                className={`flex h-8 w-8 items-center justify-center rounded-lg hover:bg-gray-100 hover:text-gray-600 ${
+                  isSortMenuOpen ? 'bg-gray-100 text-gray-600' : 'text-gray-400'
+                }`}
+              >
+                <SlidersHorizontal size={15} />
+              </button>
+              {isSortMenuOpen ? (
+                <div className="absolute right-0 top-full z-10 mt-1.5 w-48 rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+                  <p className="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
+                    Trier par
+                  </p>
+                  {SORT_OPTIONS.map((option) => (
+                    <button
+                      key={option.key}
+                      type="button"
+                      onClick={() => {
+                        setSortBy(option.key);
+                        setSortMenuOpen(false);
+                      }}
+                      className="flex w-full items-center justify-between px-3 py-2 text-left text-xs text-gray-700 hover:bg-gray-50"
+                    >
+                      {option.label}
+                      {sortBy === option.key ? <Check size={13} className="text-blue-600" /> : null}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
 

@@ -48,6 +48,8 @@ const MODIFIABLE_TICKET_FIELDS: Array<keyof UpdateTicketDto> = [
   'locationZone',
   'trade',
   'externalParty',
+  'costImpactAmount',
+  'scheduleImpactDays',
   'dueDate',
   'statusId',
 ];
@@ -90,6 +92,8 @@ const ticketSelect = {
   location_zone: true,
   trade: true,
   external_party: true,
+  cost_impact_amount: true,
+  schedule_impact_days: true,
   due_date: true,
   resolved_at: true,
   closed_at: true,
@@ -320,6 +324,8 @@ export class TicketsService {
         location_zone: createTicketDto.locationZone,
         trade: createTicketDto.trade,
         external_party: createTicketDto.externalParty,
+        cost_impact_amount: createTicketDto.costImpactAmount,
+        schedule_impact_days: createTicketDto.scheduleImpactDays,
         due_date: createTicketDto.dueDate
           ? new Date(createTicketDto.dueDate)
           : undefined,
@@ -388,6 +394,8 @@ export class TicketsService {
       location_zone: updateTicketDto.locationZone,
       trade: updateTicketDto.trade,
       external_party: updateTicketDto.externalParty,
+      cost_impact_amount: updateTicketDto.costImpactAmount,
+      schedule_impact_days: updateTicketDto.scheduleImpactDays,
       due_date: updateTicketDto.dueDate
         ? new Date(updateTicketDto.dueDate)
         : undefined,

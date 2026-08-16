@@ -34,6 +34,10 @@ export function CreateTicketPanel() {
   const [locationZone, setLocationZone] = useState('');
   const [trade, setTrade] = useState('');
   const [dueDate, setDueDate] = useState('');
+  const [isBlocking, setIsBlocking] = useState(false);
+  const [externalParty, setExternalParty] = useState('');
+  const [costImpactAmount, setCostImpactAmount] = useState('');
+  const [scheduleImpactDays, setScheduleImpactDays] = useState('');
   const [assignedUserId, setAssignedUserId] = useState('');
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -78,6 +82,10 @@ export function CreateTicketPanel() {
       locationZone: locationZone.trim() || undefined,
       trade: trade.trim() || undefined,
       dueDate: dueDate || undefined,
+      isBlocking: isBlocking || undefined,
+      externalParty: externalParty.trim() || undefined,
+      costImpactAmount: costImpactAmount ? Number(costImpactAmount) : undefined,
+      scheduleImpactDays: scheduleImpactDays ? Number(scheduleImpactDays) : undefined,
       assignedTo: assignedUserId || undefined,
     });
 
@@ -180,6 +188,52 @@ export function CreateTicketPanel() {
             onChange={(event) => setDueDate(event.target.value)}
             className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-100"
           />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <input
+            id="create-ticket-is-blocking"
+            type="checkbox"
+            checked={isBlocking}
+            onChange={(event) => setIsBlocking(event.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-200"
+          />
+          <label htmlFor="create-ticket-is-blocking" className="text-sm font-medium text-gray-700">
+            Ticket bloquant
+          </label>
+        </div>
+
+        <div>
+          <FieldLabel>Partie externe concernée</FieldLabel>
+          <input
+            value={externalParty}
+            onChange={(event) => setExternalParty(event.target.value)}
+            placeholder="ex : Sous-traitant XYZ"
+            className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-100"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <FieldLabel>Impact coût (MAD)</FieldLabel>
+            <input
+              type="number"
+              value={costImpactAmount}
+              onChange={(event) => setCostImpactAmount(event.target.value)}
+              placeholder="0"
+              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-100"
+            />
+          </div>
+          <div>
+            <FieldLabel>Impact délai (jours)</FieldLabel>
+            <input
+              type="number"
+              value={scheduleImpactDays}
+              onChange={(event) => setScheduleImpactDays(event.target.value)}
+              placeholder="0"
+              className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-100"
+            />
+          </div>
         </div>
 
         <div>

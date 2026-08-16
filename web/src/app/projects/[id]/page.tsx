@@ -7,7 +7,7 @@ import { useTicketStore } from '@/store/ticket-store';
 import { ApiError } from '@/lib/api';
 import { getProjectHub } from '@/lib/project-hub-api';
 import { mapProjectHub } from '@/lib/project-hub-mapper';
-import { formatProjectDate } from '@/lib/project-hub-format';
+import { formatProjectDate, getProjectDelayDays } from '@/lib/project-hub-format';
 import {
   canManageProjectBudget,
   canManageProjectField,
@@ -142,6 +142,21 @@ export default function ProjectHubDetailPage() {
           <div>
             <dt className="text-xs text-gray-400">Fin prévisionnelle</dt>
             <dd className="mt-0.5 text-gray-700">{formatProjectDate(project.endDatePlanned)}</dd>
+          </div>
+          <div>
+            <dt className="text-xs text-gray-400">Fin réelle</dt>
+            <dd className="mt-0.5 text-gray-700">
+              {formatProjectDate(project.endDateActual)}
+              {(() => {
+                const delayDays = getProjectDelayDays(project.endDatePlanned, project.endDateActual);
+                if (delayDays === null) return null;
+                return (
+                  <span className={`ml-2 text-xs font-medium ${delayDays > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    {delayDays > 0 ? `Retard de ${delayDays} j` : 'Dans les délais'}
+                  </span>
+                );
+              })()}
+            </dd>
           </div>
         </dl>
       </SectionCard>

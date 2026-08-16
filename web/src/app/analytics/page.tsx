@@ -19,6 +19,7 @@ import { ResolutionTimeByTypeChart } from '@/components/analytics/charts/Resolut
 import { AssigneeWorkloadChart } from '@/components/analytics/charts/AssigneeWorkloadChart';
 import { ProjectPerformanceChart } from '@/components/analytics/charts/ProjectPerformanceChart';
 import { BudgetChart } from '@/components/analytics/charts/BudgetChart';
+import { ImpactChart } from '@/components/analytics/charts/ImpactChart';
 import type { AnalyticsResponse, DateRangePreset } from '@/types/analytics';
 import type { TicketType } from '@/types/ticket';
 
@@ -141,6 +142,15 @@ export default function AnalyticsPage() {
           {data.budgetByProject ? (
             <ChartCard title="Budget par chantier" subtitle="Prévisionnel vs dépensé">
               <BudgetChart data={data.budgetByProject} />
+            </ChartCard>
+          ) : null}
+
+          {data.impactByProject ? (
+            <ChartCard
+              title="Impact & retard par chantier"
+              subtitle="Impact coût et retard cumulés induits par les tickets"
+            >
+              <ImpactChart data={data.impactByProject} />
             </ChartCard>
           ) : null}
         </div>

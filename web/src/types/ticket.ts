@@ -114,10 +114,16 @@ export type Ticket = {
   typeName: string;
   lot: string | null;
   trade: string | null;
+  isBlocking: boolean;
+  externalParty: string | null;
+  costImpactAmount: number | null;
+  scheduleImpactDays: number | null;
   project: Project;
   assignees: Person[];
   reporter: Person;
   dueDate: string | null;
+  resolvedAt: string | null;
+  closedAt: string | null;
   createdAt: string;
   lastActivityAt: string;
   lastActivityPreview: string | null;

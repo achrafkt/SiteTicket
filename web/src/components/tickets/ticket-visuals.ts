@@ -22,6 +22,14 @@ export const DUE_DATE_TEXT_CLASSES: Record<DueDateUrgency, string> = {
   none: 'text-gray-400',
 };
 
+export const ACTUAL_DELAY_TEXT_CLASSES: Record<'late' | 'onTime', string> = {
+  late: 'font-medium text-red-600',
+  onTime: 'font-medium text-green-600',
+};
+
+export const BLOCKING_BADGE_CLASSES = 'bg-red-100 text-red-700';
+export const EXTERNAL_PARTY_BADGE_CLASSES = 'bg-slate-100 text-slate-600';
+
 export const STATUS_BADGE_CLASSES: Record<TicketStatusCode, string> = {
   NEW: 'bg-status-todo-bg text-status-todo',
   ASSIGNED: 'bg-status-todo-bg text-status-todo',

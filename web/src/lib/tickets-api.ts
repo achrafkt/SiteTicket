@@ -82,6 +82,8 @@ export type ApiTicket = {
   location_zone: string | null;
   trade: string | null;
   external_party: string | null;
+  cost_impact_amount: string | null;
+  schedule_impact_days: number | null;
   due_date: string | null;
   resolved_at: string | null;
   closed_at: string | null;
@@ -115,6 +117,8 @@ export type UpdateTicketPayload = Partial<{
   locationZone: string;
   trade: string;
   externalParty: string;
+  costImpactAmount: number | null;
+  scheduleImpactDays: number | null;
   dueDate: string;
   assignedTo: string | null;
   statusId: string;
@@ -128,6 +132,10 @@ export type CreateTicketPayload = {
   priority?: string;
   locationZone?: string;
   trade?: string;
+  isBlocking?: boolean;
+  externalParty?: string;
+  costImpactAmount?: number;
+  scheduleImpactDays?: number;
   dueDate?: string;
   assignedTo?: string;
 };

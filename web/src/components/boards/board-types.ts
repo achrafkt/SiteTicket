@@ -4,6 +4,7 @@ export type BoardFilters = {
   projectId: string | null;
   assigneeId: string | null;
   priority: TicketPriority | null;
+  blockingOnly: boolean;
 };
 
 export type BoardLayoutMode = 'columns' | 'swimlanes';
@@ -23,4 +24,5 @@ export const EMPTY_BOARD_FILTERS: BoardFilters = {
   projectId: null,
   assigneeId: null,
   priority: null,
+  blockingOnly: false,
 };

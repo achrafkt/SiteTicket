@@ -2,7 +2,9 @@ import {
   IsBoolean,
   IsDateString,
   IsEnum,
+  IsInt,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
@@ -47,6 +49,14 @@ export class CreateTicketDto {
   @IsString()
   @IsOptional()
   externalParty?: string;
+
+  @IsNumber()
+  @IsOptional()
+  costImpactAmount?: number;
+
+  @IsInt()
+  @IsOptional()
+  scheduleImpactDays?: number;
 
   @IsDateString()
   @IsOptional()

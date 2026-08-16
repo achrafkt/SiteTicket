@@ -1,10 +1,11 @@
 'use client';
 
+import { ShieldAlert } from 'lucide-react';
 import type { Person, Project, TicketPriority } from '@/types/ticket';
 import { TICKET_PRIORITY_LABELS } from '@/types/ticket';
 import { Dropdown } from '@/components/tickets/Dropdown';
 import { PRIORITY_ICONS, PRIORITY_ICON_CLASSES } from '@/components/tickets/ticket-visuals';
-import type { BoardFilters } from './board-types';
+import { EMPTY_BOARD_FILTERS, type BoardFilters } from './board-types';
 
 type BoardFilterBarProps = {
   filters: BoardFilters;
@@ -54,10 +55,23 @@ export function BoardFilterBar({ filters, onChange, projects, users }: BoardFilt
         ]}
       />
 
-      {filters.projectId || filters.assigneeId || filters.priority ? (
+      <button
+        type="button"
+        onClick={() => onChange({ ...filters, blockingOnly: !filters.blockingOnly })}
+        aria-pressed={filters.blockingOnly}
+        className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+          filters.blockingOnly
+            ? 'border-red-200 bg-red-100 text-red-700'
+            : 'border-gray-200 text-gray-500 hover:border-gray-300'
+        }`}
+      >
+        <ShieldAlert size={13} /> Bloquants uniquement
+      </button>
+
+      {filters.projectId || filters.assigneeId || filters.priority || filters.blockingOnly ? (
         <button
           type="button"
-          onClick={() => onChange({ projectId: null, assigneeId: null, priority: null })}
+          onClick={() => onChange(EMPTY_BOARD_FILTERS)}
           className="text-xs font-medium text-blue-600 hover:underline"
         >
           Réinitialiser

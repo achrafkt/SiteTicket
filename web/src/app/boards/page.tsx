@@ -68,6 +68,7 @@ export default function BoardsPage() {
           return false;
         }
         if (filters.priority && ticket.priority !== filters.priority) return false;
+        if (filters.blockingOnly && !ticket.isBlocking) return false;
         return true;
       }),
     [tickets, filters],

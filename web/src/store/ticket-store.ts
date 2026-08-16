@@ -109,6 +109,15 @@ type TicketStoreState = {
   markAllNotificationsRead: () => void;
   updateTicketStatus: (id: string, statusId: string) => Promise<void>;
   updateTicketPriority: (id: string, priority: TicketPriority) => Promise<void>;
+  updateTicketImpact: (
+    id: string,
+    fields: Partial<{
+      costImpactAmount: number | null;
+      scheduleImpactDays: number | null;
+      isBlocking: boolean;
+      externalParty: string;
+    }>,
+  ) => Promise<void>;
   assignTicketToUser: (id: string, userId: string | null) => Promise<void>;
   toggleKnowledgePanel: (open?: boolean) => void;
   toggleDetailsPanel: (open?: boolean) => void;
@@ -338,6 +347,24 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
           tickets: previous,
           ticketActionError:
             err instanceof ApiError ? err.message : 'Impossible de mettre à jour la priorité.',
+        });
+      }
+    },
+
+    updateTicketImpact: async (id, fields) => {
+      const previous = get().tickets;
+      set((state) => ({
+        tickets: state.tickets.map((ticket) => (ticket.id === id ? { ...ticket, ...fields } : ticket)),
+        ticketActionError: null,
+      }));
+
+      try {
+        await updateTicket(id, fields);
+      } catch (err) {
+        set({
+          tickets: previous,
+          ticketActionError:
+            err instanceof ApiError ? err.message : "Impossible de mettre à jour l'impact du ticket.",
         });
       }
     },

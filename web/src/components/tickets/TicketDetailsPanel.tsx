@@ -3,12 +3,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, Plus, RefreshCw, Search, X } from 'lucide-react';
 import { useTicketStore } from '@/store/ticket-store';
-import { getDueDateUrgency } from '@/lib/ticket-rules';
+import { getActualDelayDays, getDueDateUrgency } from '@/lib/ticket-rules';
 import { canDeleteAttachment, getTicketPermissionGuard } from '@/lib/ticket-permissions';
 import { Avatar } from './Avatar';
 import { AttachmentThumb } from './AttachmentThumb';
 import { Dropdown } from './Dropdown';
 import {
+  ACTUAL_DELAY_TEXT_CLASSES,
   DUE_DATE_TEXT_CLASSES,
   PRIORITY_ICONS,
   PRIORITY_ICON_CLASSES,
@@ -381,6 +382,87 @@ function LinkedTicketsEditor({ ticket, disabled }: { ticket: Ticket; disabled: b
   );
 }
 
+function ImpactFieldsEditor({
+  ticket,
+  disabled,
+}: {
+  ticket: Ticket;
+  disabled: boolean;
+}) {
+  // No sync-on-prop-change effect needed: the parent renders this with
+  // `key={ticket.id}`, so switching tickets remounts the editor and these
+  // useState initializers re-run against the newly selected ticket.
+  const updateTicketImpact = useTicketStore((state) => state.updateTicketImpact);
+  const [costImpactAmount, setCostImpactAmount] = useState(ticket.costImpactAmount?.toString() ?? '');
+  const [scheduleImpactDays, setScheduleImpactDays] = useState(ticket.scheduleImpactDays?.toString() ?? '');
+  const [externalParty, setExternalParty] = useState(ticket.externalParty ?? '');
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <input
+          id="ticket-is-blocking"
+          type="checkbox"
+          checked={ticket.isBlocking}
+          onChange={(event) => updateTicketImpact(ticket.id, { isBlocking: event.target.checked })}
+          disabled={disabled}
+          className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-200"
+        />
+        <label htmlFor="ticket-is-blocking" className="text-sm font-medium text-gray-700">
+          Ticket bloquant
+        </label>
+      </div>
+
+      <div>
+        <FieldLabel>Partie externe concernée</FieldLabel>
+        <input
+          value={externalParty}
+          onChange={(event) => setExternalParty(event.target.value)}
+          onBlur={() => updateTicketImpact(ticket.id, { externalParty: externalParty.trim() })}
+          disabled={disabled}
+          placeholder="ex : Sous-traitant XYZ"
+          className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-100 disabled:bg-gray-50 disabled:text-gray-400"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <FieldLabel>Impact coût (MAD)</FieldLabel>
+          <input
+            type="number"
+            value={costImpactAmount}
+            onChange={(event) => setCostImpactAmount(event.target.value)}
+            onBlur={() =>
+              updateTicketImpact(ticket.id, {
+                costImpactAmount: costImpactAmount ? Number(costImpactAmount) : null,
+              })
+            }
+            disabled={disabled}
+            placeholder="0"
+            className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-100 disabled:bg-gray-50 disabled:text-gray-400"
+          />
+        </div>
+        <div>
+          <FieldLabel>Impact délai (jours)</FieldLabel>
+          <input
+            type="number"
+            value={scheduleImpactDays}
+            onChange={(event) => setScheduleImpactDays(event.target.value)}
+            onBlur={() =>
+              updateTicketImpact(ticket.id, {
+                scheduleImpactDays: scheduleImpactDays ? Number(scheduleImpactDays) : null,
+              })
+            }
+            disabled={disabled}
+            placeholder="0"
+            className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-100 disabled:bg-gray-50 disabled:text-gray-400"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function TicketDetailsPanel({ ticket }: { ticket: Ticket }) {
   const statuses = useTicketStore((state) => state.statuses);
   const users = useTicketStore((state) => state.users);
@@ -520,6 +602,24 @@ export function TicketDetailsPanel({ ticket }: { ticket: Ticket }) {
           >
             {formatShortDate(ticket.dueDate)}
           </p>
+          {(() => {
+            const resolutionDate = ticket.resolvedAt ?? ticket.closedAt;
+            const delayDays = getActualDelayDays(ticket.dueDate, resolutionDate);
+            if (delayDays === null) return null;
+            const isLate = delayDays > 0;
+            return (
+              <p className={`mt-1 text-xs ${ACTUAL_DELAY_TEXT_CLASSES[isLate ? 'late' : 'onTime']}`}>
+                {isLate
+                  ? `Retard réel : ${delayDays} j (résolu le ${formatShortDate(resolutionDate)})`
+                  : `Traité dans les délais (résolu le ${formatShortDate(resolutionDate)})`}
+              </p>
+            );
+          })()}
+        </div>
+
+        <div>
+          <FieldLabel>Impact & statut</FieldLabel>
+          <ImpactFieldsEditor key={ticket.id} ticket={ticket} disabled={!permissionGuard.canModify} />
         </div>
 
         <div>
