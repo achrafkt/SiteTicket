@@ -98,6 +98,8 @@ model User {
   project_tasks_created  ProjectTask[]     @relation("ProjectTaskCreatedBy")
   project_expenses_logged ProjectExpense[] @relation("ProjectExpenseCreatedBy")
   project_activity_logs ProjectActivityLogEntry[] @relation("ProjectActivityLogActor")
+  notifications_received Notification[]      @relation("NotificationRecipient")
+  notifications_triggered Notification[]     @relation("NotificationActor")
 
   @@map("users")
 }
@@ -132,6 +134,7 @@ model Project {
   tasks            ProjectTask[]
   expenses         ProjectExpense[]
   activity_log     ProjectActivityLogEntry[]
+  notifications    Notification[]
 
   @@map("projects")
 }
@@ -260,6 +263,7 @@ model Ticket {
   subtasks             TicketSubtask[]
   links_from           TicketLink[]          @relation("TicketLinkFrom")
   links_to             TicketLink[]          @relation("TicketLinkTo")
+  notifications        Notification[]
 
   @@map("tickets")
 }
@@ -362,6 +366,36 @@ model Plan {
   tickets     Ticket[]
 
   @@map("plans")
+}
+
+enum NotificationType {
+  TICKET_ASSIGNED
+  STATUS_CHANGED
+  MENTION
+  DUE_SOON
+  PROJECT_MEMBER_ADDED
+  PROJECT_MEMBER_REMOVED
+}
+
+model Notification {
+  id           String           @id @default(uuid()) @db.Uuid
+  recipient_id String           @db.Uuid
+  type         NotificationType
+  title        String
+  message      String
+  actor_id     String?          @db.Uuid
+  ticket_id    String?          @db.Uuid
+  project_id   String?          @db.Uuid
+  read_at      DateTime?
+  created_at   DateTime         @default(now())
+  recipient    User             @relation("NotificationRecipient", fields: [recipient_id], references: [id], onDelete: Cascade)
+  actor        User?            @relation("NotificationActor", fields: [actor_id], references: [id])
+  ticket       Ticket?          @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+  project      Project?         @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([recipient_id, read_at])
+  @@index([recipient_id, created_at])
+  @@map("notifications")
 }
 
 enum KnowledgeCategoryCode {

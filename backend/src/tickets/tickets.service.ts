@@ -7,8 +7,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, RoleCode } from '@prisma/client';
+import { extractMentionedUserIds } from '../common/comment-mentions';
 import { sanitizeCommentHtml } from '../common/sanitize-comment-html';
 import { UPLOADS_DIR, UPLOADS_URL_PREFIX } from '../common/uploads.constants';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { CreateLinkDto } from './dto/create-link.dto';
@@ -154,6 +156,7 @@ export class TicketsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly permissions: TicketsPermissionsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   findAll(actor: TicketActor) {
@@ -344,6 +347,14 @@ export class TicketsService {
       },
     });
 
+    if (createTicketDto.assignedTo) {
+      await this.notifications.notifyTicketAssigned(
+        ticket,
+        createTicketDto.assignedTo,
+        userId,
+      );
+    }
+
     return ticket;
   }
 
@@ -416,6 +427,18 @@ export class TicketsService {
     });
 
     if (
+      isAssigning &&
+      updateTicketDto.assignedTo &&
+      updateTicketDto.assignedTo !== ticket.assigned_to
+    ) {
+      await this.notifications.notifyTicketAssigned(
+        updatedTicket,
+        updateTicketDto.assignedTo,
+        userId,
+      );
+    }
+
+    if (
       updateTicketDto.statusId &&
       updateTicketDto.statusId !== ticket.status_id
     ) {
@@ -428,6 +451,22 @@ export class TicketsService {
           comment: 'Statut mis à jour',
         },
       });
+
+      const projectMembers = await this.prisma.projectMember.findMany({
+        where: { project_id: ticket.project_id },
+        select: { user_id: true },
+      });
+
+      await this.notifications.notifyStatusChanged(
+        updatedTicket,
+        [
+          updatedTicket.assigned_to_user?.id,
+          ticket.created_by,
+          ...projectMembers.map((member) => member.user_id),
+        ],
+        updatedTicket.status.name,
+        userId,
+      );
     }
 
     return updatedTicket;
@@ -469,7 +508,14 @@ export class TicketsService {
     createCommentDto: CreateCommentDto,
     actor: TicketActor,
   ) {
-    await this.ensureTicketExists(ticketId);
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id: ticketId },
+      select: { id: true, ticket_number: true, title: true, project_id: true },
+    });
+
+    if (!ticket) {
+      throw new NotFoundException('Ticket introuvable.');
+    }
 
     if (!this.permissions.canCommentOnTicket(actor.role)) {
       throw new ForbiddenException(
@@ -483,11 +529,15 @@ export class TicketsService {
       ? (createCommentDto.isInternal ?? true)
       : false;
 
-    return this.prisma.ticketComment.create({
+    const sanitizedCommentText = sanitizeCommentHtml(
+      createCommentDto.commentText,
+    );
+
+    const comment = await this.prisma.ticketComment.create({
       data: {
         ticket_id: ticketId,
         user_id: actor.id,
-        comment_text: sanitizeCommentHtml(createCommentDto.commentText),
+        comment_text: sanitizedCommentText,
         is_internal: isInternal,
       },
       select: {
@@ -506,6 +556,13 @@ export class TicketsService {
         },
       },
     });
+
+    const mentionedUserIds = extractMentionedUserIds(sanitizedCommentText);
+    for (const mentionedUserId of mentionedUserIds) {
+      await this.notifications.notifyMention(ticket, mentionedUserId, actor.id);
+    }
+
+    return comment;
   }
 
   async addAttachment(

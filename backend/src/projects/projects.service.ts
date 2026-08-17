@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ProjectActivityAction } from '@prisma/client';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AddProjectMemberDto } from './dto/add-project-member.dto';
 import { CreateProjectDto } from './dto/create-project.dto';
@@ -34,7 +35,10 @@ const memberUserNameSelect = {
 
 @Injectable()
 export class ProjectsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   findAll() {
     return this.prisma.project.findMany({
@@ -136,7 +140,7 @@ export class ProjectsService {
     dto: AddProjectMemberDto,
     actorId: string,
   ) {
-    await this.ensureProjectExists(projectId);
+    const project = await this.ensureProjectExists(projectId);
 
     const user = await this.prisma.user.findUnique({
       where: { id: dto.userId },
@@ -177,6 +181,12 @@ export class ProjectsService {
         'member_added',
         `Membre ajouté : ${userName} (${newRole})`,
       );
+      await this.notifications.notifyProjectMembership(
+        project,
+        dto.userId,
+        'added',
+        actorId,
+      );
     } else if (existingMembership.role_on_project !== newRole) {
       await this.logActivity(
         projectId,
@@ -190,6 +200,8 @@ export class ProjectsService {
   }
 
   async removeMember(projectId: string, userId: string, actorId: string) {
+    const project = await this.ensureProjectExists(projectId);
+
     const membership = await this.prisma.projectMember.findUnique({
       where: { project_id_user_id: { project_id: projectId, user_id: userId } },
       select: {
@@ -211,6 +223,13 @@ export class ProjectsService {
       `Membre retiré : ${membership.user.first_name} ${membership.user.last_name}`,
     );
 
+    await this.notifications.notifyProjectMembership(
+      project,
+      userId,
+      'removed',
+      actorId,
+    );
+
     return { success: true };
   }
 
@@ -228,12 +247,14 @@ export class ProjectsService {
   private async ensureProjectExists(id: string) {
     const project = await this.prisma.project.findUnique({
       where: { id },
-      select: { id: true },
+      select: { id: true, name: true },
     });
 
     if (!project) {
       throw new NotFoundException('Projet introuvable.');
     }
+
+    return project;
   }
 
   private toDate(value?: string) {

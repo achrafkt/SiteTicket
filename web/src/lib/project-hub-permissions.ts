@@ -8,6 +8,7 @@ import type { Person } from '@/types/ticket';
  * to chantiers they belong to) can only be resolved server-side, so this
  * file only covers the role-level part of the matrix.
  */
+const PROJECT_HUB_BROAD_VIEW_ROLES = ['admin', 'moa', 'moe', 'conducteur_travaux'];
 const PROJECT_HUB_INFO_MANAGER_ROLES = ['admin', 'moa', 'moe', 'conducteur_travaux'];
 const PROJECT_HUB_FIELD_MANAGER_ROLES = ['admin', 'moe', 'conducteur_travaux', 'chef_chantier'];
 const PROJECT_HUB_BUDGET_MANAGER_ROLES = ['admin', 'moe', 'conducteur_travaux'];
@@ -22,6 +23,12 @@ const PROJECT_HUB_BUDGET_VIEWER_ROLES = [
 function hasRole(currentUser: Person | null, roles: string[]): boolean {
   if (!currentUser?.roleCode) return false;
   return roles.includes(currentUser.roleCode);
+}
+
+// Note: despite the parameter name, this works for any Person, not just the
+// signed-in user — e.g. filtering a list of candidate users by role.
+export function hasBroadProjectView(currentUser: Person | null): boolean {
+  return hasRole(currentUser, PROJECT_HUB_BROAD_VIEW_ROLES);
 }
 
 export function canManageProjectInfo(currentUser: Person | null): boolean {

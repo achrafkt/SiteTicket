@@ -2,34 +2,12 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  Bell,
-  CheckCheck,
-  UserCheck,
-  MessageSquare,
-  ArrowRightLeft,
-  AlarmClock,
-  AtSign,
-  Inbox,
-} from 'lucide-react';
+import { Bell, CheckCheck, Inbox } from 'lucide-react';
 import { useTicketStore } from '@/store/ticket-store';
-import type { Notification, NotificationEventType } from '@/types/notification';
+import { NOTIFICATION_ICONS, NOTIFICATION_ICON_STYLES } from './notification-visuals';
+import type { Notification } from '@/types/notification';
 
-const EVENT_ICONS: Record<NotificationEventType, React.ElementType> = {
-  TICKET_ASSIGNED: UserCheck,
-  NEW_COMMENT: MessageSquare,
-  STATUS_CHANGED: ArrowRightLeft,
-  DUE_SOON: AlarmClock,
-  MENTION: AtSign,
-};
-
-const EVENT_ICON_STYLES: Record<NotificationEventType, string> = {
-  TICKET_ASSIGNED: 'bg-blue-50 text-blue-600',
-  NEW_COMMENT: 'bg-violet-50 text-violet-600',
-  STATUS_CHANGED: 'bg-amber-50 text-amber-600',
-  DUE_SOON: 'bg-red-50 text-red-600',
-  MENTION: 'bg-emerald-50 text-emerald-600',
-};
+const POLL_INTERVAL_MS = 45_000;
 
 function formatRelativeTime(isoDate: string): string {
   const diffMs = Date.now() - new Date(isoDate).getTime();
@@ -48,7 +26,7 @@ function formatRelativeTime(isoDate: string): string {
 }
 
 function NotificationRow({ notification, onOpen }: { notification: Notification; onOpen: (notification: Notification) => void }) {
-  const Icon = EVENT_ICONS[notification.type] ?? Bell;
+  const Icon = NOTIFICATION_ICONS[notification.type] ?? Bell;
 
   return (
     <button
@@ -59,7 +37,7 @@ function NotificationRow({ notification, onOpen }: { notification: Notification;
       }`}
     >
       <span
-        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${EVENT_ICON_STYLES[notification.type] ?? 'bg-gray-100 text-gray-500'}`}
+        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${NOTIFICATION_ICON_STYLES[notification.type] ?? 'bg-gray-100 text-gray-500'}`}
       >
         <Icon size={15} strokeWidth={2} />
       </span>
@@ -70,10 +48,35 @@ function NotificationRow({ notification, onOpen }: { notification: Notification;
           </span>
           {notification.read ? null : <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" />}
         </span>
-        <span className="mt-0.5 block truncate text-xs text-gray-500">{notification.message}</span>
+        <span className="mt-0.5 line-clamp-2 text-xs text-gray-500">{notification.message}</span>
         <span className="mt-1 block text-[11px] text-gray-400">{formatRelativeTime(notification.createdAt)}</span>
       </span>
     </button>
+  );
+}
+
+function NotificationSection({
+  label,
+  notifications,
+  onOpen,
+}: {
+  label: string | null;
+  notifications: Notification[];
+  onOpen: (notification: Notification) => void;
+}) {
+  if (notifications.length === 0) return null;
+
+  return (
+    <div>
+      {label ? (
+        <p className="px-3.5 pb-1 pt-2.5 text-[11px] font-semibold uppercase tracking-wide text-gray-400">{label}</p>
+      ) : null}
+      <div className="divide-y divide-gray-50">
+        {notifications.map((notification) => (
+          <NotificationRow key={notification.id} notification={notification} onOpen={onOpen} />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -82,11 +85,14 @@ export function NotificationsMenu() {
   const notifications = useTicketStore((state) => state.notifications);
   const markNotificationRead = useTicketStore((state) => state.markNotificationRead);
   const markAllNotificationsRead = useTicketStore((state) => state.markAllNotificationsRead);
+  const refreshNotifications = useTicketStore((state) => state.refreshNotifications);
   const setActiveTicketId = useTicketStore((state) => state.setActiveTicketId);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
   const unreadCount = notifications.filter((notification) => !notification.read).length;
+  const unread = notifications.filter((notification) => !notification.read);
+  const read = notifications.filter((notification) => notification.read);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -98,12 +104,23 @@ export function NotificationsMenu() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    const interval = setInterval(refreshNotifications, POLL_INTERVAL_MS);
+    window.addEventListener('focus', refreshNotifications);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', refreshNotifications);
+    };
+  }, [refreshNotifications]);
+
   function handleOpenNotification(notification: Notification) {
     markNotificationRead(notification.id);
     setOpen(false);
     if (notification.target?.kind === 'ticket') {
       router.push('/helpdesk');
       setActiveTicketId(notification.target.ticketId);
+    } else if (notification.target?.kind === 'project') {
+      router.push(`/projects/${notification.target.projectId}`);
     }
   }
 
@@ -117,12 +134,14 @@ export function NotificationsMenu() {
       >
         <Bell size={18} strokeWidth={1.75} />
         {unreadCount > 0 ? (
-          <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-red-500" />
+          <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold leading-none text-white">
+            {unreadCount > 9 ? '9+' : unreadCount}
+          </span>
         ) : null}
       </button>
 
       {open ? (
-        <div className="absolute right-0 top-full z-20 mt-2 w-80 overflow-hidden rounded-xl border border-slate-200 bg-white text-gray-700 shadow-[0_18px_36px_rgba(15,23,42,0.16)]">
+        <div className="absolute right-0 top-full z-20 mt-2 w-104 max-w-[90vw] overflow-hidden rounded-xl border border-slate-200 bg-white text-gray-700 shadow-[0_18px_36px_rgba(15,23,42,0.16)]">
           <div className="flex items-center justify-between border-b border-gray-100 px-3.5 py-2.5">
             <p className="text-sm font-semibold text-gray-900">
               Notifications {unreadCount > 0 ? <span className="text-gray-400">({unreadCount})</span> : null}
@@ -145,10 +164,17 @@ export function NotificationsMenu() {
               <p className="text-xs text-gray-400">Aucune notification pour le moment.</p>
             </div>
           ) : (
-            <div className="max-h-96 divide-y divide-gray-50 overflow-y-auto">
-              {notifications.map((notification) => (
-                <NotificationRow key={notification.id} notification={notification} onOpen={handleOpenNotification} />
-              ))}
+            <div className="max-h-96 overflow-y-auto">
+              <NotificationSection
+                label={read.length > 0 ? 'Non lues' : null}
+                notifications={unread}
+                onOpen={handleOpenNotification}
+              />
+              <NotificationSection
+                label={unread.length > 0 ? 'Précédentes' : null}
+                notifications={read}
+                onOpen={handleOpenNotification}
+              />
             </div>
           )}
         </div>

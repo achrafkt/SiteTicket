@@ -24,6 +24,7 @@ const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
   allowedAttributes: {
     a: ['href', 'target', 'rel'],
     img: ['src', 'alt', 'style'],
+    span: ['data-mention-user-id'],
   },
   allowedSchemesByTag: {
     a: ['http', 'https', 'mailto'],

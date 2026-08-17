@@ -14,7 +14,12 @@ import {
   mapType,
 } from '@/lib/ticket-mapper';
 import { isTicketOverdue } from '@/lib/ticket-rules';
-import { buildMockNotifications } from '@/lib/notifications-mock';
+import { mapNotification } from '@/lib/notification-mapper';
+import {
+  getNotifications,
+  markAllNotificationsRead as markAllNotificationsReadRequest,
+  markNotificationRead as markNotificationReadRequest,
+} from '@/lib/notifications-api';
 import {
   addTicketLink as addTicketLinkRequest,
   addTicketSubtask as addTicketSubtaskRequest,
@@ -81,6 +86,7 @@ type TicketStoreState = {
   activeTicketId: string | null;
   searchTerm: string;
   notifications: Notification[];
+  notificationsError: string | null;
   isKnowledgePanelOpen: boolean;
   isDetailsPanelOpen: boolean;
   viewsSidebarWidth: number;
@@ -105,8 +111,9 @@ type TicketStoreState = {
   setActiveView: (view: ViewKey) => void;
   setActiveTicketId: (id: string | null) => void;
   setSearchTerm: (term: string) => void;
-  markNotificationRead: (id: string) => void;
-  markAllNotificationsRead: () => void;
+  markNotificationRead: (id: string) => Promise<void>;
+  markAllNotificationsRead: () => Promise<void>;
+  refreshNotifications: () => Promise<void>;
   updateTicketStatus: (id: string, statusId: string) => Promise<void>;
   updateTicketPriority: (id: string, priority: TicketPriority) => Promise<void>;
   updateTicketImpact: (
@@ -191,6 +198,7 @@ function sessionInitialState(user: Person | null) {
     activeTicketId: null,
     searchTerm: '',
     notifications: [] as Notification[],
+    notificationsError: null,
     isKnowledgePanelOpen: false,
     isDetailsPanelOpen: true,
     viewsSidebarWidth: VIEWS_SIDEBAR_DEFAULT_WIDTH,
@@ -253,13 +261,15 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
     loadInitialData: async () => {
       set({ isLoading: true, error: null });
       try {
-        const [apiTickets, apiStatuses, apiTypes, apiProjects, apiUsers] = await Promise.all([
-          getTickets(),
-          getTicketStatuses(),
-          getTicketTypes(),
-          getProjects(),
-          getAssignableUsers(),
-        ]);
+        const [apiTickets, apiStatuses, apiTypes, apiProjects, apiUsers, apiNotifications] =
+          await Promise.all([
+            getTickets(),
+            getTicketStatuses(),
+            getTicketTypes(),
+            getProjects(),
+            getAssignableUsers(),
+            getNotifications(),
+          ]);
         const tickets = apiTickets.map(mapTicket);
         set({
           tickets,
@@ -267,7 +277,7 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
           types: apiTypes.map(mapType),
           projects: apiProjects.map(mapProject),
           users: apiUsers.map(mapPerson),
-          notifications: buildMockNotifications(tickets),
+          notifications: apiNotifications.map(mapNotification),
           isLoading: false,
         });
         get().setActiveTicketId(tickets[0]?.id ?? null);
@@ -290,17 +300,57 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
 
     setSearchTerm: (term) => set({ searchTerm: term }),
 
-    markNotificationRead: (id) =>
+    markNotificationRead: async (id) => {
+      const previous = get().notifications;
       set((state) => ({
         notifications: state.notifications.map((notification) =>
           notification.id === id ? { ...notification, read: true } : notification,
         ),
-      })),
+        notificationsError: null,
+      }));
 
-    markAllNotificationsRead: () =>
+      try {
+        await markNotificationReadRequest(id);
+      } catch (err) {
+        set({
+          notifications: previous,
+          notificationsError:
+            err instanceof ApiError ? err.message : 'Impossible de marquer la notification comme lue.',
+        });
+      }
+    },
+
+    markAllNotificationsRead: async () => {
+      const previous = get().notifications;
       set((state) => ({
         notifications: state.notifications.map((notification) => ({ ...notification, read: true })),
-      })),
+        notificationsError: null,
+      }));
+
+      try {
+        await markAllNotificationsReadRequest();
+      } catch (err) {
+        set({
+          notifications: previous,
+          notificationsError:
+            err instanceof ApiError ? err.message : 'Impossible de marquer les notifications comme lues.',
+        });
+      }
+    },
+
+    refreshNotifications: async () => {
+      try {
+        const apiNotifications = await getNotifications();
+        set({ notifications: apiNotifications.map(mapNotification), notificationsError: null });
+      } catch (err) {
+        // Best-effort background refresh (polling) — keep the current list on
+        // screen rather than clearing it out on a transient network hiccup.
+        set({
+          notificationsError:
+            err instanceof ApiError ? err.message : 'Impossible de rafraîchir les notifications.',
+        });
+      }
+    },
 
     updateTicketStatus: async (id, statusId) => {
       const status = get().statuses.find((candidate) => candidate.id === statusId);

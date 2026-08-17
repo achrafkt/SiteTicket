@@ -26,12 +26,15 @@ import { useTicketCollaboration } from '@/hooks/useTicketCollaboration';
 import { ALLOWED_ATTACHMENT_MIME_TYPES, MAX_ATTACHMENT_SIZE_BYTES } from '@/lib/tickets-api';
 import { canDeleteAttachment, canViewInternalComments } from '@/lib/ticket-permissions';
 import { canManageKnowledge } from '@/lib/knowledge-permissions';
+import { hasBroadProjectView } from '@/lib/project-hub-permissions';
+import { getProjectMembers } from '@/lib/admin-api';
+import { mapPerson } from '@/lib/ticket-mapper';
 import { looksLikeRichTextHtml, stripHtmlToText } from '@/lib/html-text';
 import { sanitizeCommentHtmlForRender } from '@/lib/sanitize-comment-html';
 import { Avatar } from './Avatar';
 import { AttachmentThumb } from './AttachmentThumb';
 import { formatDateTime } from './ticket-visuals';
-import type { Ticket, TicketMessage } from '@/types/ticket';
+import type { Person, Ticket, TicketMessage } from '@/types/ticket';
 
 type ReplyTab = 'public' | 'private';
 type ToolbarMenu = 'template' | 'macro' | 'link' | null;
@@ -176,8 +179,24 @@ function MessageItem({
   );
 }
 
+type MentionState = { query: string; range: Range; rect: DOMRect };
+
+const MENTION_ROW_HEIGHT_PX = 34;
+const MENTION_MENU_MAX_HEIGHT_PX = 240;
+
+// "ad" should surface "Adil Belhaj" but not e.g. "Khadija Sbai" (which merely
+// contains "ad" mid-word) — match against the start of the first name or the
+// start of the last name, not an anywhere-substring of the full name.
+function matchesMentionQuery(name: string, query: string): boolean {
+  if (!query) return true;
+  const [firstName, ...rest] = name.split(' ');
+  const lastName = rest.join(' ');
+  return firstName.toLowerCase().startsWith(query) || lastName.toLowerCase().startsWith(query);
+}
+
 export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
   const currentUser = useTicketStore((state) => state.currentUser);
+  const users = useTicketStore((state) => state.users);
   const addComment = useTicketStore((state) => state.addComment);
   const isSubmittingComment = useTicketStore((state) => state.isSubmittingComment);
   const commentError = useTicketStore((state) => state.commentError);
@@ -204,6 +223,10 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
   const [isUploadingFiles, setIsUploadingFiles] = useState(false);
   const [activeFormats, setActiveFormats] = useState({ bold: false, italic: false, underline: false });
   const [justSentCommentId, setJustSentCommentId] = useState<string | null>(null);
+  const [mentionState, setMentionState] = useState<MentionState | null>(null);
+  const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
+  const [projectMembers, setProjectMembers] = useState<Person[]>([]);
+  const mentionMenuRef = useRef<HTMLDivElement>(null);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -252,6 +275,74 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
     () => ticket.messages.filter((message) => canSeeInternalComments || !message.isInternal),
     [ticket.messages, canSeeInternalComments],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    getProjectMembers(ticket.project.id)
+      .then((members) => {
+        if (!cancelled) setProjectMembers(members.map((member) => mapPerson(member.user)));
+      })
+      .catch(() => {
+        if (!cancelled) setProjectMembers([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [ticket.project.id]);
+
+  // Who can actually be @mentioned: explicit chantier members, plus roles
+  // with cross-chantier oversight (admin/MOA/MOE/conducteur de travaux) who
+  // see every chantier elsewhere in the app without a ProjectMember row —
+  // mirrors notifyMention()'s scoping on the backend so the autocomplete
+  // never offers someone who won't actually get notified.
+  const mentionableUsers = useMemo(() => {
+    const memberIds = new Set(projectMembers.map((person) => person.id));
+    const broadViewUsers = users.filter((user) => !memberIds.has(user.id) && hasBroadProjectView(user));
+    return [...projectMembers, ...broadViewUsers];
+  }, [projectMembers, users]);
+
+  const mentionCandidates = useMemo(() => {
+    if (!mentionState) return [];
+    const query = mentionState.query.trim().toLowerCase();
+    return mentionableUsers.filter(
+      (user) => user.id !== currentUser?.id && matchesMentionQuery(user.name, query),
+    );
+  }, [mentionState, mentionableUsers, currentUser?.id]);
+
+  // Classic dropdown flip: open below the caret by default, but if there isn't
+  // enough room before the viewport bottom (and there's more room above),
+  // open upward instead — same idea as the browser's native <select>.
+  const mentionMenuStyle = useMemo(() => {
+    if (!mentionState || mentionCandidates.length === 0) return null;
+    const estimatedHeight = Math.min(
+      mentionCandidates.length * MENTION_ROW_HEIGHT_PX + 8,
+      MENTION_MENU_MAX_HEIGHT_PX,
+    );
+    const spaceBelow = window.innerHeight - mentionState.rect.bottom;
+    const openAbove = spaceBelow < estimatedHeight + 8 && mentionState.rect.top > estimatedHeight + 8;
+
+    return {
+      position: 'fixed' as const,
+      left: mentionState.rect.left,
+      top: openAbove ? mentionState.rect.top - estimatedHeight - 4 : mentionState.rect.bottom + 4,
+      maxHeight: MENTION_MENU_MAX_HEIGHT_PX,
+    };
+  }, [mentionState, mentionCandidates.length]);
+
+  useEffect(() => {
+    if (!mentionState) return;
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        mentionMenuRef.current &&
+        !mentionMenuRef.current.contains(event.target as Node) &&
+        !editorRef.current?.contains(event.target as Node)
+      ) {
+        setMentionState(null);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [mentionState]);
 
   useEffect(() => {
     const previous = previousVisibleStateRef.current;
@@ -315,6 +406,63 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
     setBody(editorRef.current?.innerHTML ?? '');
   }
 
+  // Looks for an unfinished "@query" right before the caret (in the current
+  // text node only — mentions are typed in a single burst, never split
+  // across nodes) and opens the suggestion popover for it.
+  function detectMentionTrigger() {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0 || !selection.isCollapsed) {
+      setMentionState(null);
+      return;
+    }
+
+    const range = selection.getRangeAt(0);
+    const node = range.startContainer;
+    if (!editorRef.current?.contains(node) || node.nodeType !== Node.TEXT_NODE) {
+      setMentionState(null);
+      return;
+    }
+
+    const text = node.textContent ?? '';
+    const offset = range.startOffset;
+    const uptoCursor = text.slice(0, offset);
+    const atIndex = uptoCursor.lastIndexOf('@');
+    if (atIndex === -1) {
+      setMentionState(null);
+      return;
+    }
+
+    const query = uptoCursor.slice(atIndex + 1);
+    const charBeforeAt = atIndex > 0 ? uptoCursor[atIndex - 1] : '';
+    if (/\s/.test(query) || (charBeforeAt && !/\s/.test(charBeforeAt))) {
+      setMentionState(null);
+      return;
+    }
+
+    const mentionRange = document.createRange();
+    mentionRange.setStart(node, atIndex);
+    mentionRange.setEnd(node, offset);
+    setMentionState({ query, range: mentionRange, rect: range.getBoundingClientRect() });
+    setMentionActiveIndex(0);
+  }
+
+  function insertMention(user: { id: string; name: string }) {
+    if (!mentionState) return;
+    const selection = window.getSelection();
+    if (!selection) return;
+
+    selection.removeAllRanges();
+    selection.addRange(mentionState.range);
+    document.execCommand(
+      'insertHTML',
+      false,
+      `<span data-mention-user-id="${user.id}">@${escapeHtml(user.name)}</span>&nbsp;`,
+    );
+    syncBodyFromEditor();
+    setMentionState(null);
+    editorRef.current?.focus();
+  }
+
   function saveSelection() {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) return;
@@ -359,6 +507,29 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
   }
 
   function handleEditorKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (mentionState && mentionCandidates.length > 0) {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        setMentionActiveIndex((index) => (index + 1) % mentionCandidates.length);
+        return;
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        setMentionActiveIndex((index) => (index - 1 + mentionCandidates.length) % mentionCandidates.length);
+        return;
+      }
+      if (event.key === 'Enter' || event.key === 'Tab') {
+        event.preventDefault();
+        insertMention(mentionCandidates[mentionActiveIndex]);
+        return;
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setMentionState(null);
+        return;
+      }
+    }
+
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       handleSend();
@@ -808,11 +979,22 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
             role="textbox"
             aria-multiline="true"
             data-placeholder={tab === 'public' ? 'Ajouter une réponse...' : 'Ajouter une note interne...'}
-            onInput={syncBodyFromEditor}
+            onInput={() => {
+              syncBodyFromEditor();
+              detectMentionTrigger();
+            }}
             onKeyDown={handleEditorKeyDown}
-            onKeyUp={updateActiveFormats}
+            onKeyUp={(event) => {
+              updateActiveFormats();
+              if (!['ArrowDown', 'ArrowUp', 'Enter', 'Tab', 'Escape'].includes(event.key)) {
+                detectMentionTrigger();
+              }
+            }}
             onPaste={handleEditorPaste}
-            onMouseUp={updateActiveFormats}
+            onMouseUp={() => {
+              updateActiveFormats();
+              setMentionState(null);
+            }}
             onFocus={() => {
               saveSelection();
               updateActiveFormats();
@@ -822,6 +1004,31 @@ export function TicketConversationPanel({ ticket }: { ticket: Ticket }) {
               isBlockedByOtherEditor ? 'pointer-events-none bg-gray-50 text-gray-400' : ''
             }`}
           />
+
+          {mentionState && mentionMenuStyle ? (
+            <div
+              ref={mentionMenuRef}
+              style={mentionMenuStyle}
+              className="z-30 w-56 overflow-y-auto rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+            >
+              {mentionCandidates.map((user, index) => (
+                <button
+                  key={user.id}
+                  type="button"
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    insertMention(user);
+                  }}
+                  className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs ${
+                    index === mentionActiveIndex ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <Avatar initials={user.initials} avatarUrl={user.avatarUrl} size="sm" />
+                  {user.name}
+                </button>
+              ))}
+            </div>
+          ) : null}
 
           <div className="flex items-center justify-between border-t border-gray-100 px-3 py-2">
             {canAddToKnowledge ? (

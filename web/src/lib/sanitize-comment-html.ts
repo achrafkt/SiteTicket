@@ -5,7 +5,7 @@ import DOMPurify from 'dompurify';
 // sends); this is defense-in-depth before dangerouslySetInnerHTML renders a
 // comment body that may have been produced by another user.
 const ALLOWED_TAGS = ['b', 'strong', 'i', 'em', 'u', 'a', 'img', 'br', 'p', 'div', 'span', 'ul', 'ol', 'li'];
-const ALLOWED_ATTR = ['href', 'target', 'rel', 'src', 'alt', 'style'];
+const ALLOWED_ATTR = ['href', 'target', 'rel', 'src', 'alt', 'style', 'data-mention-user-id'];
 
 export function sanitizeCommentHtmlForRender(html: string): string {
   if (typeof window === 'undefined') {

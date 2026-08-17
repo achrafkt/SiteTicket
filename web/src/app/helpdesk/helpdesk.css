@@ -73,3 +73,12 @@
   color: #2563eb;
   text-decoration: underline;
 }
+
+.rich-editor [data-mention-user-id],
+.rich-message-body [data-mention-user-id] {
+  color: #2563eb;
+  background-color: #eff6ff;
+  border-radius: 0.25rem;
+  padding: 0 0.25rem;
+  font-weight: 500;
+}
