@@ -65,4 +65,20 @@ export class CreateTicketDto {
   @IsUUID()
   @IsOptional()
   assignedTo?: string;
+
+  @IsUUID()
+  @IsOptional()
+  planId?: string;
+
+  @IsNumber()
+  @IsOptional()
+  planX?: number;
+
+  @IsNumber()
+  @IsOptional()
+  planY?: number;
+
+  @IsInt()
+  @IsOptional()
+  planPage?: number;
 }

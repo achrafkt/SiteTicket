@@ -1,9 +1,10 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Paperclip, RefreshCw, X } from 'lucide-react';
+import { MapPin, MapPinOff, Paperclip, RefreshCw, X } from 'lucide-react';
 import { useTicketStore } from '@/store/ticket-store';
 import { ALLOWED_ATTACHMENT_MIME_TYPES, MAX_ATTACHMENT_SIZE_BYTES } from '@/lib/tickets-api';
+import { TicketPinModal, type PlanPinValue } from '@/components/plans/TicketPinModal';
 import { AttachmentThumb } from './AttachmentThumb';
 import { Dropdown } from './Dropdown';
 import { PRIORITY_ICONS, PRIORITY_ICON_CLASSES } from './ticket-visuals';
@@ -19,6 +20,7 @@ export function CreateTicketPanel() {
   const users = useTicketStore((state) => state.users);
   const currentUser = useTicketStore((state) => state.currentUser);
   const createDraftTypeId = useTicketStore((state) => state.createDraftTypeId);
+  const createDraftPlanPin = useTicketStore((state) => state.createDraftPlanPin);
   const isCreatingTicket = useTicketStore((state) => state.isCreatingTicket);
   const createTicketError = useTicketStore((state) => state.createTicketError);
   const closeCreateTicketPanel = useTicketStore((state) => state.closeCreateTicketPanel);
@@ -29,7 +31,18 @@ export function CreateTicketPanel() {
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [projectId, setProjectId] = useState(projects[0]?.id ?? '');
+  const [projectId, setProjectId] = useState(createDraftPlanPin?.projectId ?? projects[0]?.id ?? '');
+  const [planPin, setPlanPin] = useState<PlanPinValue | null>(
+    createDraftPlanPin
+      ? {
+          planId: createDraftPlanPin.planId,
+          planX: createDraftPlanPin.planX,
+          planY: createDraftPlanPin.planY,
+          planPage: createDraftPlanPin.planPage,
+        }
+      : null,
+  );
+  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
   const [priority, setPriority] = useState<TicketPriority>('medium');
   const [locationZone, setLocationZone] = useState('');
   const [trade, setTrade] = useState('');
@@ -87,6 +100,10 @@ export function CreateTicketPanel() {
       costImpactAmount: costImpactAmount ? Number(costImpactAmount) : undefined,
       scheduleImpactDays: scheduleImpactDays ? Number(scheduleImpactDays) : undefined,
       assignedTo: assignedUserId || undefined,
+      planId: planPin?.planId,
+      planX: planPin?.planX,
+      planY: planPin?.planY,
+      planPage: planPin?.planPage ?? undefined,
     });
 
     if (ticket && pendingFiles.length > 0) {
@@ -141,9 +158,47 @@ export function CreateTicketPanel() {
           <FieldLabel>Chantier / Projet *</FieldLabel>
           <Dropdown
             value={projectId}
-            onChange={setProjectId}
+            onChange={(value) => {
+              setProjectId(value);
+              // A pin only makes sense for the chantier its plan belongs to.
+              setPlanPin(null);
+            }}
             options={projects.map((project) => ({ value: project.id, label: project.name }))}
           />
+        </div>
+
+        <div>
+          <FieldLabel>Plan</FieldLabel>
+          {planPin ? (
+            <div className="flex items-center gap-2">
+              <span className="flex items-center gap-1 rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
+                <MapPin size={12} /> Position définie
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsPinModalOpen(true)}
+                className="text-xs font-medium text-blue-600 hover:underline"
+              >
+                Modifier
+              </button>
+              <button
+                type="button"
+                onClick={() => setPlanPin(null)}
+                className="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-700"
+              >
+                <MapPinOff size={12} /> Retirer
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsPinModalOpen(true)}
+              disabled={!projectId}
+              className="flex items-center gap-1.5 rounded-md border border-dashed border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-500 hover:border-gray-400 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <MapPin size={13} /> Placer sur le plan
+            </button>
+          )}
         </div>
 
         <div>
@@ -321,6 +376,16 @@ export function CreateTicketPanel() {
           </button>
         </div>
       </div>
+
+      {isPinModalOpen && projectId ? (
+        <TicketPinModal
+          projectId={projectId}
+          currentPin={planPin}
+          onClose={() => setIsPinModalOpen(false)}
+          onSave={setPlanPin}
+          onRemove={planPin ? () => setPlanPin(null) : undefined}
+        />
+      ) : null}
     </section>
   );
 }

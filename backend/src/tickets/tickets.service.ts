@@ -55,6 +55,10 @@ const MODIFIABLE_TICKET_FIELDS: Array<keyof UpdateTicketDto> = [
   'scheduleImpactDays',
   'dueDate',
   'statusId',
+  'planId',
+  'planX',
+  'planY',
+  'planPage',
 ];
 
 const attachmentSelect = {
@@ -103,6 +107,18 @@ const ticketSelect = {
   custom_fields: true,
   created_at: true,
   updated_at: true,
+  plan_id: true,
+  plan_x: true,
+  plan_y: true,
+  plan_page: true,
+  plan: {
+    select: {
+      id: true,
+      name: true,
+      discipline: true,
+      version: true,
+    },
+  },
   project: {
     select: {
       id: true,
@@ -309,6 +325,18 @@ export class TicketsService {
       await this.ensureUserExists(createTicketDto.assignedTo);
     }
 
+    this.validatePlanPin(
+      createTicketDto.planId,
+      createTicketDto.planX,
+      createTicketDto.planY,
+    );
+    if (createTicketDto.planId) {
+      await this.ensurePlanBelongsToProject(
+        createTicketDto.planId,
+        createTicketDto.projectId,
+      );
+    }
+
     const initialStatus = await this.prisma.ticketStatus.findFirst({
       where: { code: 'NEW' },
       select: { id: true },
@@ -340,6 +368,10 @@ export class TicketsService {
           : undefined,
         created_by: userId,
         assigned_to: createTicketDto.assignedTo,
+        plan_id: createTicketDto.planId,
+        plan_x: createTicketDto.planX,
+        plan_y: createTicketDto.planY,
+        plan_page: createTicketDto.planPage,
       },
       select: ticketSelect,
     });
@@ -403,6 +435,18 @@ export class TicketsService {
       await this.ensureUserExists(updateTicketDto.assignedTo);
     }
 
+    this.validatePlanPin(
+      updateTicketDto.planId,
+      updateTicketDto.planX,
+      updateTicketDto.planY,
+    );
+    if (updateTicketDto.planId) {
+      await this.ensurePlanBelongsToProject(
+        updateTicketDto.planId,
+        ticket.project_id,
+      );
+    }
+
     const updateData: Record<string, unknown> = {
       title: updateTicketDto.title,
       description: updateTicketDto.description,
@@ -418,6 +462,10 @@ export class TicketsService {
         : undefined,
       assigned_to: updateTicketDto.assignedTo,
       status_id: updateTicketDto.statusId,
+      plan_id: updateTicketDto.planId,
+      plan_x: updateTicketDto.planX,
+      plan_y: updateTicketDto.planY,
+      plan_page: updateTicketDto.planPage,
     };
 
     Object.keys(updateData).forEach((key) => {
@@ -1029,6 +1077,53 @@ export class TicketsService {
 
     if (!status) {
       throw new BadRequestException('Le statut sélectionné est introuvable.');
+    }
+  }
+
+  // planX/planY are fractions (0-1) of the rendered plan's width/height, so a
+  // pin position only makes sense alongside a planId — and stays valid
+  // regardless of the viewer's zoom/screen size.
+  private validatePlanPin(
+    planId: string | null | undefined,
+    planX: number | null | undefined,
+    planY: number | null | undefined,
+  ) {
+    const hasCoords =
+      (planX !== undefined && planX !== null) ||
+      (planY !== undefined && planY !== null);
+
+    if (hasCoords && !planId) {
+      throw new BadRequestException(
+        'Un plan doit être sélectionné pour positionner ce ticket.',
+      );
+    }
+
+    for (const [label, value] of [
+      ['X', planX],
+      ['Y', planY],
+    ] as const) {
+      if (value !== undefined && value !== null && (value < 0 || value > 1)) {
+        throw new BadRequestException(
+          `La position ${label} doit être comprise entre 0 et 1.`,
+        );
+      }
+    }
+  }
+
+  private async ensurePlanBelongsToProject(planId: string, projectId: string) {
+    const plan = await this.prisma.plan.findUnique({
+      where: { id: planId },
+      select: { id: true, project_id: true },
+    });
+
+    if (!plan) {
+      throw new BadRequestException('Le plan sélectionné est introuvable.');
+    }
+
+    if (plan.project_id !== projectId) {
+      throw new BadRequestException(
+        "Ce plan n'appartient pas au chantier de ce ticket.",
+      );
     }
   }
 }

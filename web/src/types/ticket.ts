@@ -139,6 +139,11 @@ export type Ticket = {
   links: LinkedTicketRef[];
   customFields: Record<string, string>;
   attachments: Attachment[];
+  planId: string | null;
+  planX: number | null;
+  planY: number | null;
+  planPage: number | null;
+  planName: string | null;
 };
 
 export const TICKET_PRIORITY_LABELS: Record<TicketPriority, string> = {

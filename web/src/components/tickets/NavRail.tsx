@@ -6,6 +6,7 @@ import {
   Inbox,
   Lightbulb,
   Building2,
+  Map,
   LayoutGrid,
   BarChart3,
 } from 'lucide-react';
@@ -15,6 +16,7 @@ const NAV_ITEMS = [
   { key: 'inbox', label: 'Tickets', icon: Inbox, href: '/helpdesk' },
   { key: 'knowledge', label: 'Base de connaissances', icon: Lightbulb, href: '/knowledge' },
   { key: 'projects', label: 'Projets / Chantiers', icon: Building2, href: '/projects' },
+  { key: 'plans', label: 'Plans', icon: Map, href: '/plans' },
   { key: 'boards', label: 'Tableaux', icon: LayoutGrid, href: '/boards' },
   { key: 'analytics', label: 'Analytics', icon: BarChart3, href: '/analytics' },
 ] as const;

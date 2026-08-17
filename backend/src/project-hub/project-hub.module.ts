@@ -6,6 +6,6 @@ import { ProjectHubService } from './project-hub.service';
 @Module({
   controllers: [ProjectHubController],
   providers: [ProjectHubService, ProjectHubAccessService],
-  exports: [ProjectHubService],
+  exports: [ProjectHubService, ProjectHubAccessService],
 })
 export class ProjectHubModule {}

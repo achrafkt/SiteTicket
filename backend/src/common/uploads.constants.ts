@@ -32,3 +32,13 @@ export const ALLOWED_KNOWLEDGE_FILE_MIME_TYPES = [
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ];
 export const MAX_KNOWLEDGE_FILE_SIZE_BYTES = 20 * 1024 * 1024;
+
+// Site plans (drawings) attached to a chantier: photos of printed plans or
+// exported PDF drawings, same shape as ticket attachments.
+export const ALLOWED_PLAN_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'application/pdf',
+];
+export const MAX_PLAN_SIZE_BYTES = 20 * 1024 * 1024;

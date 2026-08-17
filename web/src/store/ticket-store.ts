@@ -68,6 +68,14 @@ export type ViewKey =
   | 'rfi_waiting_moe'
   | 'overdue_by_lot';
 
+export type PlanPinDraft = {
+  projectId: string;
+  planId: string;
+  planX: number;
+  planY: number;
+  planPage: number | null;
+};
+
 export const VIEWS_SIDEBAR_DEFAULT_WIDTH = 256;
 export const VIEWS_SIDEBAR_COLLAPSED_WIDTH = 64;
 export const VIEWS_SIDEBAR_COLLAPSE_THRESHOLD = 160;
@@ -103,6 +111,7 @@ type TicketStoreState = {
   isCreatePanelOpen: boolean;
   createDraftTypeId: string | null;
   createDraftStatusId: string | null;
+  createDraftPlanPin: PlanPinDraft | null;
   isCreatingTicket: boolean;
   createTicketError: string | null;
   isUploadingAttachment: boolean;
@@ -134,7 +143,7 @@ type TicketStoreState = {
   addComment: (ticketId: string, body: string, isInternal: boolean) => Promise<TicketMessage | null>;
   updateComment: (ticketId: string, commentId: string, body: string) => Promise<TicketMessage | null>;
   deleteComment: (ticketId: string, commentId: string) => Promise<boolean>;
-  openCreateTicketPanel: (typeId: string, statusId?: string) => void;
+  openCreateTicketPanel: (typeId: string, statusId?: string, planPin?: PlanPinDraft) => void;
   closeCreateTicketPanel: () => void;
   createTicket: (payload: Omit<CreateTicketPayload, 'ticketTypeId'>) => Promise<Ticket | null>;
   deleteTicket: (id: string) => Promise<boolean>;
@@ -153,6 +162,12 @@ type TicketStoreState = {
   removeTicketLink: (ticketId: string, linkedTicketId: string) => Promise<void>;
   setTicketCustomField: (ticketId: string, key: string, value: string) => Promise<void>;
   removeTicketCustomField: (ticketId: string, key: string) => Promise<void>;
+  setTicketPlanPin: (
+    ticketId: string,
+    pin: { planId: string; planX: number; planY: number; planPage: number | null },
+  ) => Promise<void>;
+  removeTicketPlanPin: (ticketId: string) => Promise<void>;
+  clearPlanFromTickets: (planId: string) => void;
 };
 
 export function filterTicketsByView(
@@ -217,6 +232,7 @@ function sessionInitialState(user: Person | null) {
     isCreatePanelOpen: false,
     createDraftTypeId: null,
     createDraftStatusId: null,
+    createDraftPlanPin: null,
     isCreatingTicket: false,
     createTicketError: null,
     isUploadingAttachment: false,
@@ -539,11 +555,12 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
       }
     },
 
-    openCreateTicketPanel: (typeId, statusId) =>
+    openCreateTicketPanel: (typeId, statusId, planPin) =>
       set({
         isCreatePanelOpen: true,
         createDraftTypeId: typeId,
         createDraftStatusId: statusId ?? null,
+        createDraftPlanPin: planPin ?? null,
         createTicketError: null,
       }),
 
@@ -552,6 +569,7 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
         isCreatePanelOpen: false,
         createDraftTypeId: null,
         createDraftStatusId: null,
+        createDraftPlanPin: null,
         createTicketError: null,
       }),
 
@@ -572,6 +590,7 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
           isCreatePanelOpen: false,
           createDraftTypeId: null,
           createDraftStatusId: null,
+          createDraftPlanPin: null,
         }));
         get().setActiveTicketId(ticket.id);
 
@@ -863,5 +882,62 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
         });
       }
     },
+
+    setTicketPlanPin: async (ticketId, pin) => {
+      const previous = get().tickets;
+      set((state) => ({
+        tickets: state.tickets.map((ticket) =>
+          ticket.id === ticketId
+            ? { ...ticket, planId: pin.planId, planX: pin.planX, planY: pin.planY, planPage: pin.planPage }
+            : ticket,
+        ),
+        ticketActionError: null,
+      }));
+
+      try {
+        await updateTicket(ticketId, pin);
+      } catch (err) {
+        set({
+          tickets: previous,
+          ticketActionError:
+            err instanceof ApiError ? err.message : 'Impossible de positionner ce ticket sur le plan.',
+        });
+      }
+    },
+
+    removeTicketPlanPin: async (ticketId) => {
+      const previous = get().tickets;
+      set((state) => ({
+        tickets: state.tickets.map((ticket) =>
+          ticket.id === ticketId
+            ? { ...ticket, planId: null, planX: null, planY: null, planPage: null, planName: null }
+            : ticket,
+        ),
+        ticketActionError: null,
+      }));
+
+      try {
+        await updateTicket(ticketId, { planId: null, planX: null, planY: null, planPage: null });
+      } catch (err) {
+        set({
+          tickets: previous,
+          ticketActionError:
+            err instanceof ApiError ? err.message : 'Impossible de retirer ce ticket du plan.',
+        });
+      }
+    },
+
+    // Called after a plan is deleted server-side — the backend already
+    // auto-unpins tickets placed on it (see PlansService.remove), this just
+    // mirrors that into client state so the global tickets list doesn't go
+    // stale until the next full reload.
+    clearPlanFromTickets: (planId) =>
+      set((state) => ({
+        tickets: state.tickets.map((ticket) =>
+          ticket.planId === planId
+            ? { ...ticket, planId: null, planX: null, planY: null, planPage: null, planName: null }
+            : ticket,
+        ),
+      })),
   };
 });

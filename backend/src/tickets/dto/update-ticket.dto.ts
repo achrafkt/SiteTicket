@@ -58,4 +58,20 @@ export class UpdateTicketDto {
   @IsUUID()
   @IsOptional()
   statusId?: string;
+
+  @IsUUID()
+  @IsOptional()
+  planId?: string | null;
+
+  @IsNumber()
+  @IsOptional()
+  planX?: number | null;
+
+  @IsNumber()
+  @IsOptional()
+  planY?: number | null;
+
+  @IsInt()
+  @IsOptional()
+  planPage?: number | null;
 }

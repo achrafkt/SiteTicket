@@ -189,5 +189,10 @@ export function mapTicket(apiTicket: ApiTicket): Ticket {
     links: (apiTicket.links ?? []).map(mapLinkedTicket),
     customFields: apiTicket.custom_fields ?? {},
     attachments: (apiTicket.attachments ?? []).map(mapAttachment),
+    planId: apiTicket.plan_id,
+    planX: apiTicket.plan_x,
+    planY: apiTicket.plan_y,
+    planPage: apiTicket.plan_page,
+    planName: apiTicket.plan?.name ?? null,
   };
 }

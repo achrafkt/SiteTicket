@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, Plus, RefreshCw, Search, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, MapPin, MapPinOff, Plus, RefreshCw, Search, X } from 'lucide-react';
 import { useTicketStore } from '@/store/ticket-store';
 import { getActualDelayDays, getDueDateUrgency } from '@/lib/ticket-rules';
 import { canDeleteAttachment, getTicketPermissionGuard } from '@/lib/ticket-permissions';
+import { TicketPinModal } from '@/components/plans/TicketPinModal';
 import { Avatar } from './Avatar';
 import { AttachmentThumb } from './AttachmentThumb';
 import { Dropdown } from './Dropdown';
@@ -463,6 +464,68 @@ function ImpactFieldsEditor({
   );
 }
 
+function TicketPlanField({ ticket, disabled }: { ticket: Ticket; disabled: boolean }) {
+  const setTicketPlanPin = useTicketStore((state) => state.setTicketPlanPin);
+  const removeTicketPlanPin = useTicketStore((state) => state.removeTicketPlanPin);
+  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
+
+  const currentPin =
+    ticket.planId && ticket.planX !== null && ticket.planY !== null
+      ? { planId: ticket.planId, planX: ticket.planX, planY: ticket.planY, planPage: ticket.planPage }
+      : null;
+
+  return (
+    <div>
+      <FieldLabel>Plan</FieldLabel>
+      {currentPin ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="flex items-center gap-1 rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
+            <MapPin size={12} /> {ticket.planName ?? 'Positionné'}
+          </span>
+          {!disabled ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setIsPinModalOpen(true)}
+                className="text-xs font-medium text-blue-600 hover:underline"
+              >
+                Repositionner
+              </button>
+              <button
+                type="button"
+                onClick={() => removeTicketPlanPin(ticket.id)}
+                className="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-gray-700"
+              >
+                <MapPinOff size={12} /> Retirer du plan
+              </button>
+            </>
+          ) : null}
+        </div>
+      ) : disabled ? (
+        <p className="text-sm text-gray-400">Non positionné.</p>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setIsPinModalOpen(true)}
+          className="flex items-center gap-1.5 rounded-md border border-dashed border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-500 hover:border-gray-400 hover:text-gray-700"
+        >
+          <MapPin size={13} /> Placer sur le plan
+        </button>
+      )}
+
+      {isPinModalOpen ? (
+        <TicketPinModal
+          projectId={ticket.project.id}
+          currentPin={currentPin}
+          onClose={() => setIsPinModalOpen(false)}
+          onSave={(pin) => setTicketPlanPin(ticket.id, pin)}
+          onRemove={currentPin ? () => removeTicketPlanPin(ticket.id) : undefined}
+        />
+      ) : null}
+    </div>
+  );
+}
+
 export function TicketDetailsPanel({ ticket }: { ticket: Ticket }) {
   const statuses = useTicketStore((state) => state.statuses);
   const users = useTicketStore((state) => state.users);
@@ -643,6 +706,8 @@ export function TicketDetailsPanel({ ticket }: { ticket: Ticket }) {
           <FieldLabel>Corps de métier concerné</FieldLabel>
           <p className="text-sm text-gray-700">{ticket.trade ?? 'Non renseigné'}</p>
         </div>
+
+        <TicketPlanField ticket={ticket} disabled={!permissionGuard.canModify} />
 
         <div>
           <FieldLabel>Tags</FieldLabel>

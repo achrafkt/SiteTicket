@@ -6,6 +6,7 @@ import { AuthModule } from './auth/auth.module';
 import { HealthModule } from './health/health.module';
 import { KnowledgeModule } from './knowledge/knowledge.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { PlansModule } from './plans/plans.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProjectHubModule } from './project-hub/project-hub.module';
 import { ProjectsModule } from './projects/projects.module';
@@ -30,6 +31,7 @@ import { UsersModule } from './users/users.module';
     KnowledgeModule,
     AnalyticsModule,
     NotificationsModule,
+    PlansModule,
   ],
 })
 export class AppModule {}

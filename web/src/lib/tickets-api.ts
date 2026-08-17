@@ -91,6 +91,11 @@ export type ApiTicket = {
   closed_at: string | null;
   created_at: string;
   updated_at: string;
+  plan_id: string | null;
+  plan_x: number | null;
+  plan_y: number | null;
+  plan_page: number | null;
+  plan: { id: string; name: string; discipline: string | null; version: string | null } | null;
   project: { id: string; name: string; code: string };
   ticket_type: { id: string; code: string; name: string };
   status: { id: string; code: string; name: string; sort_order: number; is_terminal: boolean };
@@ -124,6 +129,10 @@ export type UpdateTicketPayload = Partial<{
   dueDate: string;
   assignedTo: string | null;
   statusId: string;
+  planId: string | null;
+  planX: number | null;
+  planY: number | null;
+  planPage: number | null;
 }>;
 
 export type CreateTicketPayload = {
@@ -140,6 +149,10 @@ export type CreateTicketPayload = {
   scheduleImpactDays?: number;
   dueDate?: string;
   assignedTo?: string;
+  planId?: string;
+  planX?: number;
+  planY?: number;
+  planPage?: number;
 };
 
 export function getTickets() {
