@@ -27,6 +27,7 @@ import {
   createComment,
   createTicket as createTicketRequest,
   deleteAttachment,
+  deleteComment as deleteCommentRequest,
   deleteTicket as deleteTicketRequest,
   getAssignableUsers,
   getProjects,
@@ -39,6 +40,7 @@ import {
   removeTicketSubtask as removeTicketSubtaskRequest,
   removeTicketTag as removeTicketTagRequest,
   setTicketCustomField as setTicketCustomFieldRequest,
+  updateComment as updateCommentRequest,
   updateTicket,
   updateTicketSubtask,
   uploadAttachment,
@@ -130,6 +132,8 @@ type TicketStoreState = {
   toggleDetailsPanel: (open?: boolean) => void;
   setViewsSidebarWidth: (width: number) => void;
   addComment: (ticketId: string, body: string, isInternal: boolean) => Promise<TicketMessage | null>;
+  updateComment: (ticketId: string, commentId: string, body: string) => Promise<TicketMessage | null>;
+  deleteComment: (ticketId: string, commentId: string) => Promise<boolean>;
   openCreateTicketPanel: (typeId: string, statusId?: string) => void;
   closeCreateTicketPanel: () => void;
   createTicket: (payload: Omit<CreateTicketPayload, 'ticketTypeId'>) => Promise<Ticket | null>;
@@ -474,6 +478,64 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
             err instanceof ApiError ? err.message : "Impossible d'envoyer le commentaire.",
         });
         return null;
+      }
+    },
+
+    updateComment: async (ticketId, commentId, body) => {
+      set({ isSubmittingComment: true, commentError: null });
+      try {
+        const apiComment = await updateCommentRequest(ticketId, commentId, body);
+        const comment = mapComment(apiComment);
+        set((state) => ({
+          tickets: state.tickets.map((ticket) =>
+            ticket.id === ticketId
+              ? {
+                  ...ticket,
+                  messages: ticket.messages.map((message) =>
+                    message.id === commentId ? comment : message,
+                  ),
+                }
+              : ticket,
+          ),
+          isSubmittingComment: false,
+        }));
+        return comment;
+      } catch (err) {
+        set({
+          isSubmittingComment: false,
+          commentError:
+            err instanceof ApiError ? err.message : 'Impossible de modifier le commentaire.',
+        });
+        return null;
+      }
+    },
+
+    deleteComment: async (ticketId, commentId) => {
+      const previous = get().tickets;
+      const deletedAt = new Date().toISOString();
+      set((state) => ({
+        tickets: state.tickets.map((ticket) =>
+          ticket.id === ticketId
+            ? {
+                ...ticket,
+                messages: ticket.messages.map((message) =>
+                  message.id === commentId ? { ...message, deletedAt } : message,
+                ),
+              }
+            : ticket,
+        ),
+      }));
+
+      try {
+        await deleteCommentRequest(ticketId, commentId);
+        return true;
+      } catch (err) {
+        set({
+          tickets: previous,
+          commentError:
+            err instanceof ApiError ? err.message : 'Impossible de supprimer le commentaire.',
+        });
+        return false;
       }
     },
 

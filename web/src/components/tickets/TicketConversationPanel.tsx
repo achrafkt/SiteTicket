@@ -20,11 +20,17 @@ import {
   Braces,
   RefreshCw,
   Trash2,
+  Pencil,
 } from 'lucide-react';
 import { useTicketStore } from '@/store/ticket-store';
 import { useTicketCollaboration } from '@/hooks/useTicketCollaboration';
 import { ALLOWED_ATTACHMENT_MIME_TYPES, MAX_ATTACHMENT_SIZE_BYTES } from '@/lib/tickets-api';
-import { canDeleteAttachment, canViewInternalComments } from '@/lib/ticket-permissions';
+import {
+  canDeleteAttachment,
+  canDeleteComment,
+  canEditComment,
+  canViewInternalComments,
+} from '@/lib/ticket-permissions';
 import { canManageKnowledge } from '@/lib/knowledge-permissions';
 import { hasBroadProjectView } from '@/lib/project-hub-permissions';
 import { getProjectMembers } from '@/lib/admin-api';
@@ -106,9 +112,71 @@ function MessageItem({
 }) {
   const currentUser = useTicketStore((state) => state.currentUser);
   const deleteTicketAttachment = useTicketStore((state) => state.deleteTicketAttachment);
+  const updateComment = useTicketStore((state) => state.updateComment);
+  const deleteComment = useTicketStore((state) => state.deleteComment);
   const [collapsed, setCollapsed] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(message.body);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const isLong = stripHtmlToText(message.body).length > 220;
   const isRichHtml = looksLikeRichTextHtml(message.body);
+
+  // The 15-minute edit/delete window can lapse while this panel stays open;
+  // re-evaluate periodically so the action menu doesn't keep offering a
+  // control that the server would now reject.
+  const [, forceTick] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => forceTick((n) => n + 1), 30_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (!isMenuOpen) return;
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isMenuOpen]);
+
+  if (message.deletedAt) {
+    return (
+      <div className="rounded-lg border border-gray-100 bg-white p-3">
+        <div className="flex items-center gap-2">
+          <Avatar initials={message.authorInitials} avatarUrl={message.authorAvatarUrl} size="md" />
+          <p className="text-sm font-medium text-gray-900">{message.authorName}</p>
+          <span className="text-xs text-gray-400">{formatDateTime(message.createdAt)}</span>
+        </div>
+        <p className="mt-2 text-sm italic text-gray-400">Commentaire supprimé</p>
+      </div>
+    );
+  }
+
+  const canEdit = canEditComment(currentUser, message);
+  const canDelete = canDeleteComment(currentUser, message);
+
+  async function handleSaveEdit() {
+    if (isComposerEmpty(editValue)) return;
+    setIsSavingEdit(true);
+    const result = await updateComment(ticketId, message.id, editValue);
+    setIsSavingEdit(false);
+    if (result) setIsEditing(false);
+  }
+
+  async function handleDelete() {
+    const confirmed = window.confirm('Supprimer ce commentaire ? Cette action est irréversible.');
+    if (!confirmed) return;
+
+    setIsMenuOpen(false);
+    setIsDeleting(true);
+    await deleteComment(ticketId, message.id);
+    setIsDeleting(false);
+  }
 
   return (
     <div
@@ -124,7 +192,10 @@ function MessageItem({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-400">{formatDateTime(message.createdAt)}</span>
+          <span className="text-xs text-gray-400">
+            {formatDateTime(message.createdAt)}
+            {message.editedAt ? ` · modifié ${formatDateTime(message.editedAt)}` : ''}
+          </span>
           {isLong ? (
             <button
               type="button"
@@ -133,6 +204,45 @@ function MessageItem({
             >
               {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
             </button>
+          ) : null}
+          {(canEdit || canDelete) && !isEditing ? (
+            <div className="relative" ref={menuRef}>
+              <button
+                type="button"
+                title="Actions"
+                onClick={() => setIsMenuOpen((value) => !value)}
+                disabled={isDeleting}
+                className="rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-50"
+              >
+                {isDeleting ? <RefreshCw size={14} className="animate-spin" /> : <MoreHorizontal size={14} />}
+              </button>
+              {isMenuOpen ? (
+                <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+                  {canEdit ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditValue(message.body);
+                        setIsEditing(true);
+                        setIsMenuOpen(false);
+                      }}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                    >
+                      <Pencil size={14} /> Modifier
+                    </button>
+                  ) : null}
+                  {canDelete ? (
+                    <button
+                      type="button"
+                      onClick={handleDelete}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 size={14} /> Supprimer
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
           ) : null}
         </div>
       </div>
@@ -143,7 +253,34 @@ function MessageItem({
         </span>
       ) : null}
 
-      {!collapsed ? (
+      {isEditing ? (
+        <div className="mt-2">
+          <textarea
+            value={editValue}
+            onChange={(event) => setEditValue(event.target.value)}
+            rows={3}
+            className="w-full rounded-md border border-gray-200 p-2 text-sm text-gray-700 focus:border-blue-400 focus:outline-none"
+          />
+          <div className="mt-1.5 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleSaveEdit}
+              disabled={isSavingEdit || isComposerEmpty(editValue)}
+              className="rounded-md bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              Enregistrer
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsEditing(false)}
+              disabled={isSavingEdit}
+              className="rounded-md px-2.5 py-1 text-xs font-medium text-gray-500 hover:bg-gray-100"
+            >
+              Annuler
+            </button>
+          </div>
+        </div>
+      ) : !collapsed ? (
         isRichHtml ? (
           <div
             className="rich-message-body mt-2 whitespace-pre-wrap text-sm text-gray-700"
@@ -154,7 +291,7 @@ function MessageItem({
         )
       ) : null}
 
-      {!collapsed && message.attachments.length > 0 ? (
+      {!isEditing && !collapsed && message.attachments.length > 0 ? (
         <div className="mt-2.5 flex flex-wrap gap-2">
           {message.attachments.map((attachment) => {
             const canRemove = canDeleteAttachment(currentUser, attachment.uploadedBy.id);

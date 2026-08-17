@@ -38,7 +38,7 @@ export function CreateKnowledgePanel({ ticket }: { ticket: Ticket }) {
   const canManage = canManageKnowledge(currentUser);
 
   const draft = loadDraft(ticket.id);
-  const lastMessage = ticket.messages[ticket.messages.length - 1] ?? null;
+  const lastMessage = [...ticket.messages].reverse().find((message) => !message.deletedAt) ?? null;
 
   const [categories, setCategories] = useState<KnowledgeCategory[]>([]);
   const [title, setTitle] = useState(draft?.title ?? ticket.title);

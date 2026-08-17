@@ -114,3 +114,35 @@ export function canDeleteAttachment(currentUser: Person | null, uploaderId: stri
 
   return uploaderId === currentUser.id;
 }
+
+const COMMENT_EDIT_WINDOW_MS = 15 * 60 * 1000;
+
+// Author-only, 15-minute correction window — mirrors backend
+// TicketsPermissionsService.canEditComment. UI-only advisory check; the
+// backend re-checks and is authoritative.
+export function canEditComment(
+  currentUser: Person | null,
+  message: { authorId: string; createdAt: string },
+): boolean {
+  if (!currentUser || message.authorId !== currentUser.id) {
+    return false;
+  }
+
+  return Date.now() - new Date(message.createdAt).getTime() <= COMMENT_EDIT_WINDOW_MS;
+}
+
+// Mirrors backend TicketsPermissionsService.canDeleteComment: admin (delete
+// scope === 'all') may delete any comment at any time; everyone else only
+// their own comment within the same correction window as editing.
+export function canDeleteComment(
+  currentUser: Person | null,
+  message: { authorId: string; createdAt: string },
+): boolean {
+  const scope = currentUser?.roleCode ? TICKET_PERMISSIONS[currentUser.roleCode]?.delete : undefined;
+
+  if (currentUser && scope === 'all') {
+    return true;
+  }
+
+  return canEditComment(currentUser, message);
+}

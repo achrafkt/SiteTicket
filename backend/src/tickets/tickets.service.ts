@@ -18,6 +18,7 @@ import { CreateSubtaskDto } from './dto/create-subtask.dto';
 import { CreateTagDto } from './dto/create-tag.dto';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { SetCustomFieldDto } from './dto/set-custom-field.dto';
+import { UpdateCommentDto } from './dto/update-comment.dto';
 import { UpdateSubtaskDto } from './dto/update-subtask.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 import {
@@ -181,6 +182,8 @@ export class TicketsService {
             comment_text: true,
             is_internal: true,
             created_at: true,
+            edited_at: true,
+            deleted_at: true,
             user: {
               select: {
                 id: true,
@@ -213,6 +216,8 @@ export class TicketsService {
             comment_text: true,
             is_internal: true,
             created_at: true,
+            edited_at: true,
+            deleted_at: true,
             user: {
               select: {
                 id: true,
@@ -229,6 +234,7 @@ export class TicketsService {
           },
         },
         attachments: {
+          where: { OR: [{ comment_id: null }, { comment: { deleted_at: null } }] },
           orderBy: [{ uploaded_at: 'asc' }],
           select: attachmentSelect,
         },
@@ -563,6 +569,94 @@ export class TicketsService {
     }
 
     return comment;
+  }
+
+  async updateComment(
+    ticketId: string,
+    commentId: string,
+    updateCommentDto: UpdateCommentDto,
+    actor: TicketActor,
+  ) {
+    const comment = await this.prisma.ticketComment.findUnique({
+      where: { id: commentId },
+      select: {
+        id: true,
+        ticket_id: true,
+        user_id: true,
+        created_at: true,
+        deleted_at: true,
+      },
+    });
+
+    if (!comment || comment.ticket_id !== ticketId || comment.deleted_at) {
+      throw new NotFoundException('Commentaire introuvable.');
+    }
+
+    if (!this.permissions.canEditComment(actor.id, comment)) {
+      throw new ForbiddenException(
+        'Vous ne pouvez modifier votre commentaire que dans les 15 minutes suivant sa publication.',
+      );
+    }
+
+    const sanitizedCommentText = sanitizeCommentHtml(
+      updateCommentDto.commentText,
+    );
+
+    return this.prisma.ticketComment.update({
+      where: { id: commentId },
+      data: { comment_text: sanitizedCommentText, edited_at: new Date() },
+      select: {
+        id: true,
+        comment_text: true,
+        is_internal: true,
+        created_at: true,
+        edited_at: true,
+        deleted_at: true,
+        user: {
+          select: {
+            id: true,
+            first_name: true,
+            last_name: true,
+            email: true,
+            avatar_url: true,
+          },
+        },
+      },
+    });
+  }
+
+  async removeComment(ticketId: string, commentId: string, actor: TicketActor) {
+    const comment = await this.prisma.ticketComment.findUnique({
+      where: { id: commentId },
+      select: {
+        id: true,
+        ticket_id: true,
+        user_id: true,
+        created_at: true,
+        deleted_at: true,
+      },
+    });
+
+    if (!comment || comment.ticket_id !== ticketId) {
+      throw new NotFoundException('Commentaire introuvable.');
+    }
+
+    if (comment.deleted_at) {
+      return { success: true };
+    }
+
+    if (!this.permissions.canDeleteComment(actor.role, actor.id, comment)) {
+      throw new ForbiddenException(
+        'Votre rôle ne permet pas de supprimer ce commentaire.',
+      );
+    }
+
+    await this.prisma.ticketComment.update({
+      where: { id: commentId },
+      data: { deleted_at: new Date(), deleted_by: actor.id },
+    });
+
+    return { success: true };
   }
 
   async addAttachment(

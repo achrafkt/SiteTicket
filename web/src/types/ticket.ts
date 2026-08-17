@@ -61,12 +61,15 @@ export type Attachment = {
 
 export type TicketMessage = {
   id: string;
+  authorId: string;
   authorName: string;
   authorInitials: string;
   authorAvatarUrl: string | null;
   isInternal: boolean;
   body: string;
   createdAt: string;
+  editedAt: string | null;
+  deletedAt: string | null;
   attachments: Attachment[];
 };
 

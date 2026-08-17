@@ -41,6 +41,8 @@ export type ApiComment = {
   comment_text: string;
   is_internal: boolean;
   created_at: string;
+  edited_at: string | null;
+  deleted_at: string | null;
   user: ApiUserRef;
   attachments?: ApiAttachment[];
 };
@@ -198,6 +200,19 @@ export function createComment(ticketId: string, commentText: string, isInternal:
   return apiFetch<ApiComment>(`/tickets/${ticketId}/comments`, {
     method: 'POST',
     body: JSON.stringify({ commentText, isInternal }),
+  });
+}
+
+export function updateComment(ticketId: string, commentId: string, commentText: string) {
+  return apiFetch<ApiComment>(`/tickets/${ticketId}/comments/${commentId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ commentText }),
+  });
+}
+
+export function deleteComment(ticketId: string, commentId: string) {
+  return apiFetch<{ success: boolean }>(`/tickets/${ticketId}/comments/${commentId}`, {
+    method: 'DELETE',
   });
 }
 

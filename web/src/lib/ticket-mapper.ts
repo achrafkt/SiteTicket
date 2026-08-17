@@ -57,12 +57,15 @@ export function mapAttachment(attachment: ApiAttachment): Attachment {
 export function mapComment(comment: ApiComment): TicketMessage {
   return {
     id: comment.id,
+    authorId: comment.user.id,
     authorName: `${comment.user.first_name} ${comment.user.last_name}`,
     authorInitials: `${comment.user.first_name[0] ?? ''}${comment.user.last_name[0] ?? ''}`.toUpperCase(),
     authorAvatarUrl: resolveAvatarUrl(comment.user.avatar_url),
     isInternal: comment.is_internal,
     body: comment.comment_text,
     createdAt: comment.created_at,
+    editedAt: comment.edited_at,
+    deletedAt: comment.deleted_at,
     attachments: (comment.attachments ?? []).map(mapAttachment),
   };
 }
@@ -140,7 +143,9 @@ export function mapTicket(apiTicket: ApiTicket): Ticket {
       : apiTicket.updated_at;
 
   const lastActivityPreview = lastComment
-    ? truncateText(stripHtmlToText(lastComment.comment_text), 100)
+    ? lastComment.deleted_at
+      ? 'Commentaire supprimé'
+      : truncateText(stripHtmlToText(lastComment.comment_text), 100)
     : null;
 
   const lastActivityAuthor = lastComment

@@ -18,6 +18,7 @@ import { CreateSubtaskDto } from './dto/create-subtask.dto';
 import { CreateTagDto } from './dto/create-tag.dto';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { SetCustomFieldDto } from './dto/set-custom-field.dto';
+import { UpdateCommentDto } from './dto/update-comment.dto';
 import { UpdateSubtaskDto } from './dto/update-subtask.dto';
 import { UpdateTicketDto } from './dto/update-ticket.dto';
 import { TicketActor, TicketsService } from './tickets.service';
@@ -75,6 +76,30 @@ export class TicketsController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.ticketsService.addComment(id, createCommentDto, toActor(user));
+  }
+
+  @Patch(':id/comments/:commentId')
+  updateComment(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('commentId', new ParseUUIDPipe()) commentId: string,
+    @Body() updateCommentDto: UpdateCommentDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.ticketsService.updateComment(
+      id,
+      commentId,
+      updateCommentDto,
+      toActor(user),
+    );
+  }
+
+  @Delete(':id/comments/:commentId')
+  removeComment(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('commentId', new ParseUUIDPipe()) commentId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.ticketsService.removeComment(id, commentId, toActor(user));
   }
 
   @Post(':id/tags')

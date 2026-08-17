@@ -89,7 +89,8 @@ model User {
   project_members    ProjectMember[]
   created_tickets    Ticket[]              @relation("TicketCreatedBy")
   assigned_tickets   Ticket[]              @relation("TicketAssignedTo")
-  ticket_comments    TicketComment[]
+  ticket_comments    TicketComment[]      @relation("TicketCommentAuthor")
+  deleted_ticket_comments TicketComment[] @relation("TicketCommentDeletedBy")
   ticket_files       TicketAttachment[]    @relation("TicketAttachmentUploadedBy")
   status_changes     TicketStatusHistory[] @relation("TicketStatusHistoryChangedBy")
   uploaded_plans     Plan[]                @relation("PlanUploadedBy")
@@ -309,8 +310,12 @@ model TicketComment {
   comment_text String
   is_internal  Boolean            @default(true)
   created_at   DateTime           @default(now())
+  edited_at    DateTime?
+  deleted_at   DateTime?
+  deleted_by   String?            @db.Uuid
   ticket       Ticket             @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
-  user         User               @relation(fields: [user_id], references: [id])
+  user         User               @relation("TicketCommentAuthor", fields: [user_id], references: [id])
+  deleted_by_user User?           @relation("TicketCommentDeletedBy", fields: [deleted_by], references: [id])
   attachments  TicketAttachment[]
 
   @@map("ticket_comments")

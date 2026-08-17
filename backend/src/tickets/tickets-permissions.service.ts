@@ -78,6 +78,40 @@ export class TicketsPermissionsService {
     return attachment.uploaded_by === userId;
   }
 
+  private static readonly COMMENT_EDIT_WINDOW_MS = 15 * 60 * 1000;
+
+  // Author-only, time-boxed "correction window" — the same window governs
+  // both editing and the author's own delete right (see canDeleteComment).
+  canEditComment(
+    userId: string,
+    comment: { user_id: string; created_at: Date },
+  ): boolean {
+    if (comment.user_id !== userId) {
+      return false;
+    }
+
+    return (
+      Date.now() - comment.created_at.getTime() <=
+      TicketsPermissionsService.COMMENT_EDIT_WINDOW_MS
+    );
+  }
+
+  // Admin ('delete' scope === 'all') may delete any comment at any time.
+  // Everyone else may only delete their own comment, and only within the
+  // same 15-minute correction window as editing — admin does not get an
+  // edit bypass, only an unrestricted delete right.
+  canDeleteComment(
+    role: RoleCode,
+    userId: string,
+    comment: { user_id: string; created_at: Date },
+  ): boolean {
+    if (TICKET_PERMISSIONS[role].delete === 'all') {
+      return true;
+    }
+
+    return this.canEditComment(userId, comment);
+  }
+
   private async checkScope(
     scope: TicketPermissionScope,
     userId: string,
