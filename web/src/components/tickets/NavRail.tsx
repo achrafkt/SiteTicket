@@ -9,17 +9,28 @@ import {
   Map,
   LayoutGrid,
   BarChart3,
+  Sparkles,
+  type LucideIcon,
 } from 'lucide-react';
 import { SettingsMenu } from './SettingsMenu';
 
-const NAV_ITEMS = [
+interface NavItem {
+  key: string;
+  label: string;
+  icon: LucideIcon;
+  href: string;
+  badge?: string;
+}
+
+const NAV_ITEMS: NavItem[] = [
   { key: 'inbox', label: 'Tickets', icon: Inbox, href: '/helpdesk' },
   { key: 'knowledge', label: 'Base de connaissances', icon: Lightbulb, href: '/knowledge' },
   { key: 'projects', label: 'Projets / Chantiers', icon: Building2, href: '/projects' },
   { key: 'plans', label: 'Plans', icon: Map, href: '/plans' },
   { key: 'boards', label: 'Tableaux', icon: LayoutGrid, href: '/boards' },
   { key: 'analytics', label: 'Analytics', icon: BarChart3, href: '/analytics' },
-] as const;
+  { key: 'copilot', label: 'Copilote IA', icon: Sparkles, href: '/copilot', badge: 'Bêta' },
+];
 
 export function NavRail() {
   const pathname = usePathname();
@@ -47,8 +58,18 @@ export function NavRail() {
                 strokeWidth={1.75}
                 className={isActive ? 'text-white' : 'text-slate-300 group-hover:text-white'}
               />
-              <span className="pointer-events-none absolute left-14 z-20 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+              {item.badge ? (
+                <span className="absolute -top-1 -right-1 rounded-full bg-amber-400 px-1 py-px text-[8px] font-bold uppercase leading-tight text-slate-900 shadow-sm">
+                  {item.badge}
+                </span>
+              ) : null}
+              <span className="pointer-events-none absolute left-14 z-20 flex items-center gap-1.5 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-xs text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
                 {item.label}
+                {item.badge ? (
+                  <span className="rounded-full bg-amber-400 px-1.5 py-0.5 text-[9px] font-bold uppercase text-slate-900">
+                    {item.badge}
+                  </span>
+                ) : null}
               </span>
             </Link>
           );
