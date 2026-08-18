@@ -45,7 +45,8 @@ export function SettingsMenu() {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [emailNotifications, setEmailNotifications] = useState(true);
-  const [compactView, setCompactView] = useState(false);
+  const compactView = useTicketStore((state) => state.compactView);
+  const setCompactView = useTicketStore((state) => state.setCompactView);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -125,7 +126,7 @@ export function SettingsMenu() {
                 Vue compacte des tickets
               </span>
             }
-            checked={compactView}
+            checked={mounted ? compactView : false}
             onChange={setCompactView}
           />
 

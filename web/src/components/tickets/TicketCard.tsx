@@ -18,11 +18,19 @@ type TicketCardProps = {
   ticket: Ticket;
   isSelected: boolean;
   isChecked: boolean;
+  compact?: boolean;
   onSelect: () => void;
   onToggleCheck: () => void;
 };
 
-export function TicketCard({ ticket, isSelected, isChecked, onSelect, onToggleCheck }: TicketCardProps) {
+export function TicketCard({
+  ticket,
+  isSelected,
+  isChecked,
+  compact = false,
+  onSelect,
+  onToggleCheck,
+}: TicketCardProps) {
   const PriorityIcon = PRIORITY_ICONS[ticket.priority];
 
   return (
@@ -33,14 +41,20 @@ export function TicketCard({ ticket, isSelected, isChecked, onSelect, onToggleCh
       onKeyDown={(event) => {
         if (event.key === 'Enter') onSelect();
       }}
-      className={`group relative flex cursor-pointer flex-col gap-3 px-4 py-3.5 transition-all duration-200 ${
+      className={`group relative flex cursor-pointer flex-col transition-all duration-200 ${
+        compact ? 'gap-1.5 px-3 py-2' : 'gap-3 px-4 py-3.5'
+      } ${
         isSelected
           ? 'bg-blue-50/90 shadow-[inset_0_0_0_1px_rgba(59,130,246,0.18)]'
           : 'hover:bg-white hover:shadow-[0_8px_20px_rgba(15,23,42,0.04)]'
       }`}
     >
       <div className="flex items-start justify-between gap-3">
-        <p className="min-w-0 truncate text-sm font-semibold leading-5 text-slate-950">
+        <p
+          className={`min-w-0 truncate font-semibold text-slate-950 ${
+            compact ? 'text-xs leading-4' : 'text-sm leading-5'
+          }`}
+        >
           {ticket.title}
         </p>
         <span
@@ -51,7 +65,7 @@ export function TicketCard({ ticket, isSelected, isChecked, onSelect, onToggleCh
         </span>
       </div>
 
-      {ticket.lastActivityPreview ? (
+      {!compact && ticket.lastActivityPreview ? (
         <p className="min-w-0 truncate text-xs text-slate-500">
           {ticket.lastActivityAuthor ? (
             <span className="font-medium text-slate-600">{ticket.lastActivityAuthor} : </span>
@@ -60,7 +74,7 @@ export function TicketCard({ ticket, isSelected, isChecked, onSelect, onToggleCh
         </p>
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className={`flex flex-wrap items-center justify-between ${compact ? 'gap-1.5' : 'gap-2'}`}>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <input
             type="checkbox"

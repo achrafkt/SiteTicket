@@ -85,6 +85,17 @@ export function getEffectiveViewsSidebarWidth(width: number): number {
   return width <= VIEWS_SIDEBAR_COLLAPSE_THRESHOLD ? VIEWS_SIDEBAR_COLLAPSED_WIDTH : width;
 }
 
+const COMPACT_VIEW_STORAGE_KEY = 'site-ticket-compact-view';
+
+function getStoredCompactView(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(COMPACT_VIEW_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 type TicketStoreState = {
   tickets: Ticket[];
   statuses: TicketStatus[];
@@ -100,6 +111,7 @@ type TicketStoreState = {
   isKnowledgePanelOpen: boolean;
   isDetailsPanelOpen: boolean;
   viewsSidebarWidth: number;
+  compactView: boolean;
   isLoading: boolean;
   error: string | null;
   ticketActionError: string | null;
@@ -140,6 +152,7 @@ type TicketStoreState = {
   toggleKnowledgePanel: (open?: boolean) => void;
   toggleDetailsPanel: (open?: boolean) => void;
   setViewsSidebarWidth: (width: number) => void;
+  setCompactView: (value: boolean) => void;
   addComment: (ticketId: string, body: string, isInternal: boolean) => Promise<TicketMessage | null>;
   updateComment: (ticketId: string, commentId: string, body: string) => Promise<TicketMessage | null>;
   deleteComment: (ticketId: string, commentId: string) => Promise<boolean>;
@@ -273,6 +286,7 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
 
   return {
     ...sessionInitialState(getStoredUser()),
+    compactView: getStoredCompactView(),
 
     resetSession: (user) => set(sessionInitialState(user)),
 
@@ -474,6 +488,17 @@ export const useTicketStore = create<TicketStoreState>((set, get) => {
           Math.max(VIEWS_SIDEBAR_COLLAPSED_WIDTH, width),
         ),
       }),
+
+    setCompactView: (value) => {
+      set({ compactView: value });
+      if (typeof window !== 'undefined') {
+        try {
+          window.localStorage.setItem(COMPACT_VIEW_STORAGE_KEY, value ? '1' : '0');
+        } catch {
+          // best-effort persistence, same as elsewhere in this store
+        }
+      }
+    },
 
     addComment: async (ticketId, body, isInternal) => {
       set({ isSubmittingComment: true, commentError: null });

@@ -42,6 +42,7 @@ export function TicketList() {
   const setSearchTerm = useTicketStore((state) => state.setSearchTerm);
   const currentUserId = useTicketStore((state) => state.currentUser?.id ?? null);
   const viewsSidebarWidth = useTicketStore((state) => state.viewsSidebarWidth);
+  const compactView = useTicketStore((state) => state.compactView);
   const listWidth =
     BASE_LIST_WIDTH + (VIEWS_SIDEBAR_DEFAULT_WIDTH - getEffectiveViewsSidebarWidth(viewsSidebarWidth));
 
@@ -197,6 +198,7 @@ export function TicketList() {
               ticket={ticket}
               isSelected={ticket.id === activeTicketId}
               isChecked={checkedIds.has(ticket.id)}
+              compact={compactView}
               onSelect={() => setActiveTicketId(ticket.id)}
               onToggleCheck={() => toggleCheck(ticket.id)}
             />
