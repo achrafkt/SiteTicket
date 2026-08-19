@@ -12,6 +12,7 @@ import { sanitizeCommentHtml } from '../common/sanitize-comment-html';
 import { UPLOADS_DIR, UPLOADS_URL_PREFIX } from '../common/uploads.constants';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ProjectHubAccessService } from '../project-hub/project-hub-access.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { CreateLinkDto } from './dto/create-link.dto';
 import { CreateSubtaskDto } from './dto/create-subtask.dto';
@@ -174,14 +175,17 @@ export class TicketsService {
     private readonly prisma: PrismaService,
     private readonly permissions: TicketsPermissionsService,
     private readonly notifications: NotificationsService,
+    private readonly access: ProjectHubAccessService,
   ) {}
 
-  findAll(actor: TicketActor) {
+  async findAll(actor: TicketActor) {
     const canViewInternalComments = this.permissions.canViewInternalComments(
       actor.role,
     );
+    const projectFilter = await this.access.visibleProjectIdsFilter(actor);
 
     return this.prisma.ticket.findMany({
+      where: projectFilter ? { project: projectFilter } : undefined,
       orderBy: [{ created_at: 'desc' }],
       select: {
         ...ticketSelect,
@@ -298,6 +302,8 @@ export class TicketsService {
       throw new NotFoundException('Ticket introuvable.');
     }
 
+    await this.access.assertCanView(ticket.project.id, actor);
+
     const { links_from, links_to, ...rest } = ticket;
 
     return {
@@ -315,6 +321,8 @@ export class TicketsService {
         'Votre rôle ne permet pas de créer un ticket.',
       );
     }
+
+    await this.access.assertCanView(createTicketDto.projectId, actor);
 
     const userId = actor.id;
     await this.ensureProjectExists(createTicketDto.projectId);

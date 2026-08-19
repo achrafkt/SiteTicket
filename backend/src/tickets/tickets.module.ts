@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { ProjectHubAccessService } from '../project-hub/project-hub-access.service';
 import { TicketAttachmentsController } from './ticket-attachments.controller';
 import { TicketStatusesController } from './ticket-statuses.controller';
 import { TicketTypesController } from './ticket-types.controller';
@@ -15,7 +16,7 @@ import { TicketsService } from './tickets.service';
     TicketStatusesController,
     TicketAttachmentsController,
   ],
-  providers: [TicketsService, TicketsPermissionsService],
+  providers: [TicketsService, TicketsPermissionsService, ProjectHubAccessService],
   exports: [TicketsService, TicketsPermissionsService],
 })
 export class TicketsModule {}

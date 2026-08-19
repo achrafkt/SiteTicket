@@ -9,27 +9,36 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { RoleCode } from '@prisma/client';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
+import type { ProjectHubActor } from '../project-hub/project-hub-access.service';
 import { AddProjectMemberDto } from './dto/add-project-member.dto';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { ProjectsService } from './projects.service';
+
+function toActor(user: AuthenticatedUser): ProjectHubActor {
+  return { id: user.sub, role: user.role as RoleCode };
+}
 
 @Controller('projects')
 export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
 
   @Get()
-  findAll() {
-    return this.projectsService.findAll();
+  findAll(@CurrentUser() user: AuthenticatedUser) {
+    return this.projectsService.findAll(toActor(user));
   }
 
   @Get(':id')
-  findOne(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.projectsService.findOne(id);
+  findOne(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.projectsService.findOne(id, toActor(user));
   }
 
   @UseGuards(RolesGuard)
@@ -57,8 +66,11 @@ export class ProjectsController {
   }
 
   @Get(':id/members')
-  findMembers(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.projectsService.findMembers(id);
+  findMembers(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.projectsService.findMembers(id, toActor(user));
   }
 
   @UseGuards(RolesGuard)

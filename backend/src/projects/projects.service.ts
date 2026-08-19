@@ -6,6 +6,10 @@ import {
 import { ProjectActivityAction } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  ProjectHubAccessService,
+  ProjectHubActor,
+} from '../project-hub/project-hub-access.service';
 import { AddProjectMemberDto } from './dto/add-project-member.dto';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
@@ -38,16 +42,22 @@ export class ProjectsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly access: ProjectHubAccessService,
   ) {}
 
-  findAll() {
+  async findAll(actor: ProjectHubActor) {
+    const filter = await this.access.visibleProjectIdsFilter(actor);
+
     return this.prisma.project.findMany({
+      where: filter,
       orderBy: [{ created_at: 'desc' }],
       include: { _count: { select: { members: true } } },
     });
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, actor: ProjectHubActor) {
+    await this.access.assertCanView(id, actor);
+
     const project = await this.prisma.project.findUnique({
       where: { id },
       include: { _count: { select: { members: true } } },
@@ -125,7 +135,8 @@ export class ProjectsService {
     return { success: true };
   }
 
-  async findMembers(projectId: string) {
+  async findMembers(projectId: string, actor: ProjectHubActor) {
+    await this.access.assertCanView(projectId, actor);
     await this.ensureProjectExists(projectId);
 
     return this.prisma.projectMember.findMany({
