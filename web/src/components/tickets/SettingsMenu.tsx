@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Settings, User, LogOut, Bell, LayoutGrid, ShieldCheck } from 'lucide-react';
 import { useTicketStore } from '@/store/ticket-store';
 import { clearStoredUser } from '@/lib/current-user';
+import { getMe, updateProfile } from '@/lib/profile-api';
 
 function PreferenceToggle({
   label,
@@ -44,7 +45,7 @@ export function SettingsMenu() {
   const currentUser = useTicketStore((state) => state.currentUser);
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [emailNotifications, setEmailNotifications] = useState(true);
+  const [emailNotifications, setEmailNotifications] = useState<boolean | null>(null);
   const compactView = useTicketStore((state) => state.compactView);
   const setCompactView = useTicketStore((state) => state.setCompactView);
   const ref = useRef<HTMLDivElement>(null);
@@ -53,6 +54,25 @@ export function SettingsMenu() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    getMe()
+      .then((user) => {
+        if (!cancelled) setEmailNotifications(user.email_notifications_enabled);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function handleToggleEmailNotifications(value: boolean) {
+    setEmailNotifications(value);
+    updateProfile({ emailNotificationsEnabled: value }).catch(() => {
+      setEmailNotifications(!value);
+    });
+  }
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -116,8 +136,8 @@ export function SettingsMenu() {
                 Notifications par e-mail
               </span>
             }
-            checked={emailNotifications}
-            onChange={setEmailNotifications}
+            checked={emailNotifications ?? false}
+            onChange={handleToggleEmailNotifications}
           />
           <PreferenceToggle
             label={

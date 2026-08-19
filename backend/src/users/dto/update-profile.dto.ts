@@ -1,4 +1,10 @@
-import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import {
+  IsBoolean,
+  IsEmail,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
 export class UpdateProfileDto {
   @IsOptional()
@@ -14,4 +20,10 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsEmail({}, { message: 'Veuillez saisir une adresse e-mail valide.' })
   email?: string;
+
+  @IsOptional()
+  @IsBoolean({
+    message: 'La préférence de notifications par e-mail doit être un booléen.',
+  })
+  emailNotificationsEnabled?: boolean;
 }

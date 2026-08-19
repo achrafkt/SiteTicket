@@ -1,6 +1,15 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { hasBroadProjectView } from '../common/permissions/project-hub-permissions';
+import { MailerService } from '../mailer/mailer.service';
+import {
+  dueSoonEmail,
+  mentionEmail,
+  projectMembershipEmail,
+  statusChangedEmail,
+  ticketAssignedEmail,
+} from '../mailer/templates';
 import { PrismaService } from '../prisma/prisma.service';
 import { ListNotificationsQueryDto } from './dto/list-notifications-query.dto';
 
@@ -35,8 +44,38 @@ const notificationSelect = {
 @Injectable()
 export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
+  private readonly frontendUrl: string;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mailer: MailerService,
+    config: ConfigService,
+  ) {
+    this.frontendUrl =
+      config.get<string>('FRONTEND_URL') ?? 'http://localhost:3000';
+  }
+
+  /**
+   * Envoie l'email correspondant à un événement déjà notifié en base, en le
+   * sautant silencieusement si le destinataire a désactivé les notifications
+   * par e-mail (ou n'existe plus).
+   */
+  private async sendEmailIfEnabled(
+    recipientId: string,
+    build: (user: { first_name: string; email: string }) => {
+      subject: string;
+      html: string;
+    },
+  ) {
+    const user = await this.prisma.user.findFirst({
+      where: { id: recipientId, email_notifications_enabled: true },
+      select: { email: true, first_name: true },
+    });
+    if (!user) return;
+
+    const { subject, html } = build(user);
+    await this.mailer.sendMail({ to: user.email, subject, html });
+  }
 
   findForUser(userId: string, query: ListNotificationsQueryDto) {
     return this.prisma.notification.findMany({
@@ -104,6 +143,10 @@ export class NotificationsService {
         ticket_id: ticket.id,
       },
     });
+
+    await this.sendEmailIfEnabled(assigneeId, (user) =>
+      ticketAssignedEmail(user, ticket, `${this.frontendUrl}/helpdesk`),
+    );
   }
 
   async notifyStatusChanged(
@@ -128,6 +171,19 @@ export class NotificationsService {
         ticket_id: ticket.id,
       })),
     });
+
+    await Promise.all(
+      uniqueRecipients.map((recipientId) =>
+        this.sendEmailIfEnabled(recipientId, (user) =>
+          statusChangedEmail(
+            user,
+            ticket,
+            statusLabel,
+            `${this.frontendUrl}/helpdesk`,
+          ),
+        ),
+      ),
+    );
   }
 
   async notifyMention(
@@ -174,6 +230,10 @@ export class NotificationsService {
         ticket_id: ticket.id,
       },
     });
+
+    await this.sendEmailIfEnabled(mentionedUserId, (recipient) =>
+      mentionEmail(recipient, ticket, `${this.frontendUrl}/helpdesk`),
+    );
   }
 
   async notifyProjectMembership(
@@ -199,6 +259,15 @@ export class NotificationsService {
         project_id: project.id,
       },
     });
+
+    await this.sendEmailIfEnabled(targetUserId, (user) =>
+      projectMembershipEmail(
+        user,
+        project,
+        kind,
+        `${this.frontendUrl}/projects/${project.id}`,
+      ),
+    );
   }
 
   @Cron(CronExpression.EVERY_6_HOURS)
@@ -243,6 +312,10 @@ export class NotificationsService {
           ticket_id: ticket.id,
         },
       });
+
+      await this.sendEmailIfEnabled(recipientId, (user) =>
+        dueSoonEmail(user, ticket, `${this.frontendUrl}/helpdesk`),
+      );
     }
 
     if (tickets.length > 0) {

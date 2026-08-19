@@ -26,6 +26,7 @@ const userSelect = {
   phone: true,
   avatar_url: true,
   is_active: true,
+  email_notifications_enabled: true,
   last_login_at: true,
   created_at: true,
   updated_at: true,
@@ -108,6 +109,7 @@ export class UsersService {
         first_name: updateProfileDto.firstName,
         last_name: updateProfileDto.lastName,
         email: updateProfileDto.email,
+        email_notifications_enabled: updateProfileDto.emailNotificationsEnabled,
       },
       select: userSelect,
     });

@@ -8,6 +8,7 @@ export type ApiProfileUser = Omit<ApiUserRef, 'role'> & {
   phone: string | null;
   avatar_url: string | null;
   is_active: boolean;
+  email_notifications_enabled: boolean;
   last_login_at: string | null;
   created_at: string;
   updated_at: string;
@@ -17,6 +18,7 @@ export type UpdateProfilePayload = Partial<{
   firstName: string;
   lastName: string;
   email: string;
+  emailNotificationsEnabled: boolean;
 }>;
 
 export type ChangePasswordPayload = {
