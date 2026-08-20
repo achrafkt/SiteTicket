@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import Anthropic from '@anthropic-ai/sdk';
+import { FunctionDeclaration } from '@google/genai';
 import { TicketPriority, TicketStatusCode } from '@prisma/client';
 import {
   ProjectHubAccessService,
@@ -41,12 +41,12 @@ export class CopilotToolsService {
     private readonly access: ProjectHubAccessService,
   ) {}
 
-  readonly definitions: Anthropic.Tool[] = [
+  readonly definitions: FunctionDeclaration[] = [
     {
       name: 'search_tickets',
       description:
         "Recherche des tickets visibles par l'utilisateur courant, avec filtres optionnels (chantier, statut, priorité, assignation, caractère bloquant). Ne renvoie jamais de ticket hors du périmètre de l'utilisateur.",
-      input_schema: {
+      parametersJsonSchema: {
         type: 'object',
         properties: {
           projectId: {
@@ -84,7 +84,7 @@ export class CopilotToolsService {
       name: 'get_budget_summary',
       description:
         "Résumé budgétaire (planifié, dépensé, écart, impact coût/délai des tickets) pour un ou plusieurs chantiers visibles par l'utilisateur. Si l'utilisateur n'a pas le droit de voir les budgets, l'outil le signale explicitement plutôt que de renvoyer une valeur.",
-      input_schema: {
+      parametersJsonSchema: {
         type: 'object',
         properties: {
           projectIds: {
@@ -100,7 +100,7 @@ export class CopilotToolsService {
       name: 'get_ticket_analytics',
       description:
         "Analytics déjà calculées sur les tickets (répartition par statut/priorité/type, temps moyen de résolution, charge par assigné, volume dans le temps) pour un chantier ou l'ensemble des chantiers visibles.",
-      input_schema: {
+      parametersJsonSchema: {
         type: 'object',
         properties: {
           projectId: {
@@ -124,7 +124,7 @@ export class CopilotToolsService {
       name: 'search_knowledge_base',
       description:
         "Recherche dans les articles de la base de connaissances visibles par le rôle de l'utilisateur (titre, contenu, catégorie).",
-      input_schema: {
+      parametersJsonSchema: {
         type: 'object',
         properties: {
           query: { type: 'string', description: 'Termes de recherche.' },

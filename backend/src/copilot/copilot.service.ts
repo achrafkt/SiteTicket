@@ -5,14 +5,15 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenAI } from '@google/genai';
+import type { Content, FunctionCall, Part } from '@google/genai';
 import type { Response } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { CopilotHistoryMessageDto } from './dto/send-copilot-message.dto';
 import { CopilotActor, CopilotToolsService } from './copilot-tools.service';
 
-const MODEL = 'claude-sonnet-5';
-const MAX_TOKENS = 4096;
+const MODEL = 'gemini-3.5-flash-lite';
+const MAX_OUTPUT_TOKENS = 4096;
 const MAX_TOOL_ITERATIONS = 6;
 const QUOTA_WINDOW_MS = 24 * 60 * 60 * 1000;
 
@@ -42,9 +43,9 @@ function toToolErrorMessage(err: unknown): string {
 export class CopilotService {
   private readonly logger = new Logger(CopilotService.name);
   // Constructed lazily (see getClient()) so a missing/empty
-  // ANTHROPIC_API_KEY never crashes Nest at boot — it only surfaces as an
+  // GEMINI_API_KEY never crashes Nest at boot — it only surfaces as an
   // error on the first copilot request, leaving the rest of the app usable.
-  private client: Anthropic | null = null;
+  private client: GoogleGenAI | null = null;
   private readonly apiKey: string | undefined;
   private readonly dailyMessageLimit: number;
 
@@ -53,18 +54,18 @@ export class CopilotService {
     private readonly prisma: PrismaService,
     private readonly tools: CopilotToolsService,
   ) {
-    this.apiKey = config.get<string>('ANTHROPIC_API_KEY') || undefined;
+    this.apiKey = config.get<string>('GEMINI_API_KEY') || undefined;
     this.dailyMessageLimit = Number(
       config.get<string>('COPILOT_DAILY_MESSAGE_LIMIT') ?? 30,
     );
   }
 
-  private getClient(): Anthropic {
+  private getClient(): GoogleGenAI {
     if (!this.apiKey) {
-      throw new Error("ANTHROPIC_API_KEY n'est pas configurée sur le serveur.");
+      throw new Error("GEMINI_API_KEY n'est pas configurée sur le serveur.");
     }
     if (!this.client) {
-      this.client = new Anthropic({ apiKey: this.apiKey });
+      this.client = new GoogleGenAI({ apiKey: this.apiKey });
     }
     return this.client;
   }
@@ -117,41 +118,55 @@ export class CopilotService {
       res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     };
 
-    const messages: Anthropic.MessageParam[] = [
-      ...history.map((h) => ({ role: h.role, content: h.content })),
-      { role: 'user' as const, content: message },
+    const contents: Content[] = [
+      ...history.map((h) => ({
+        role: h.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: h.content }],
+      })),
+      { role: 'user', parts: [{ text: message }] },
     ];
 
     try {
       const client = this.getClient();
       for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration += 1) {
-        const stream = client.messages.stream({
+        const stream = await client.models.generateContentStream({
           model: MODEL,
-          max_tokens: MAX_TOKENS,
-          system: SYSTEM_PROMPT,
-          tools: this.tools.definitions,
-          messages,
+          contents,
+          config: {
+            systemInstruction: SYSTEM_PROMPT,
+            maxOutputTokens: MAX_OUTPUT_TOKENS,
+            tools: [{ functionDeclarations: this.tools.definitions }],
+          },
         });
 
-        stream.on('text', (delta) => send('delta', { text: delta }));
-
-        const response = await stream.finalMessage();
-        messages.push({ role: 'assistant', content: response.content });
-
-        if (response.stop_reason === 'tool_use') {
-          const toolUses = response.content.filter(
-            (block): block is Anthropic.ToolUseBlock =>
-              block.type === 'tool_use',
-          );
-          const toolResults: Anthropic.ToolResultBlockParam[] = [];
-          for (const toolUse of toolUses) {
-            toolResults.push(await this.runTool(toolUse, actor));
+        // Gemini streams text incrementally chunk-by-chunk (each chunk's
+        // `parts` is a delta, not the cumulative turn), while a function
+        // call arrives whole in a single part — so we forward text deltas
+        // as they come and separately accumulate every part to reconstruct
+        // the complete model turn once the stream ends.
+        const turnParts: Part[] = [];
+        for await (const chunk of stream) {
+          if (chunk.text) {
+            send('delta', { text: chunk.text });
           }
-          messages.push({ role: 'user', content: toolResults });
-          continue;
+          const candidateParts = chunk.candidates?.[0]?.content?.parts;
+          if (candidateParts) {
+            turnParts.push(...candidateParts);
+          }
         }
 
-        if (response.stop_reason === 'pause_turn') {
+        contents.push({ role: 'model', parts: turnParts });
+
+        const functionCalls = turnParts
+          .map((part) => part.functionCall)
+          .filter((call): call is FunctionCall => call != null);
+
+        if (functionCalls.length > 0) {
+          const responseParts: Part[] = [];
+          for (const call of functionCalls) {
+            responseParts.push(await this.runTool(call, actor));
+          }
+          contents.push({ role: 'user', parts: responseParts });
           continue;
         }
 
@@ -177,26 +192,26 @@ export class CopilotService {
   }
 
   private async runTool(
-    toolUse: Anthropic.ToolUseBlock,
+    call: FunctionCall,
     actor: CopilotActor,
-  ): Promise<Anthropic.ToolResultBlockParam> {
+  ): Promise<Part> {
+    const name = call.name ?? '';
     try {
       const result = await this.tools.execute(
-        toolUse.name,
-        (toolUse.input ?? {}) as Record<string, unknown>,
+        name,
+        (call.args ?? {}) as Record<string, unknown>,
         actor,
       );
       return {
-        type: 'tool_result',
-        tool_use_id: toolUse.id,
-        content: JSON.stringify(result),
+        functionResponse: { name, id: call.id, response: { output: result } },
       };
     } catch (err) {
       return {
-        type: 'tool_result',
-        tool_use_id: toolUse.id,
-        content: toToolErrorMessage(err),
-        is_error: true,
+        functionResponse: {
+          name,
+          id: call.id,
+          response: { error: toToolErrorMessage(err) },
+        },
       };
     }
   }
