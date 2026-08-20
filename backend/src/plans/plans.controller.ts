@@ -1,5 +1,3 @@
-import { randomUUID } from 'crypto';
-import { extname } from 'path';
 import {
   BadRequestException,
   Body,
@@ -15,14 +13,12 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { RoleCode } from '@prisma/client';
-import { diskStorage } from 'multer';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { MulterExceptionFilter } from '../common/filters/multer-exception.filter';
 import {
   ALLOWED_PLAN_MIME_TYPES,
   MAX_PLAN_SIZE_BYTES,
-  UPLOADS_DIR,
 } from '../common/uploads.constants';
 import { ProjectHubAccessService } from '../project-hub/project-hub-access.service';
 import { PlansService } from './plans.service';
@@ -50,12 +46,6 @@ export class PlansController {
   @UseFilters(MulterExceptionFilter)
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: diskStorage({
-        destination: UPLOADS_DIR,
-        filename: (_req, file, callback) => {
-          callback(null, `${randomUUID()}${extname(file.originalname)}`);
-        },
-      }),
       limits: { fileSize: MAX_PLAN_SIZE_BYTES },
       fileFilter: (_req, file, callback) => {
         if (!ALLOWED_PLAN_MIME_TYPES.includes(file.mimetype)) {

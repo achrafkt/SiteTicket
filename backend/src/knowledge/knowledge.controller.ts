@@ -1,5 +1,3 @@
-import { randomUUID } from 'crypto';
-import { extname } from 'path';
 import {
   BadRequestException,
   Body,
@@ -17,7 +15,6 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { RoleCode } from '@prisma/client';
-import { diskStorage } from 'multer';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -27,7 +24,6 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import {
   ALLOWED_KNOWLEDGE_FILE_MIME_TYPES,
   MAX_KNOWLEDGE_FILE_SIZE_BYTES,
-  UPLOADS_DIR,
 } from '../common/uploads.constants';
 import { CreateKnowledgeArticleDto } from './dto/create-knowledge-article.dto';
 import { UpdateKnowledgeArticleDto } from './dto/update-knowledge-article.dto';
@@ -92,12 +88,6 @@ export class KnowledgeController {
   @UseFilters(MulterExceptionFilter)
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: diskStorage({
-        destination: UPLOADS_DIR,
-        filename: (_req, file, callback) => {
-          callback(null, `${randomUUID()}${extname(file.originalname)}`);
-        },
-      }),
       limits: { fileSize: MAX_KNOWLEDGE_FILE_SIZE_BYTES },
       fileFilter: (_req, file, callback) => {
         if (!ALLOWED_KNOWLEDGE_FILE_MIME_TYPES.includes(file.mimetype)) {

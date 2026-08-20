@@ -27,12 +27,14 @@ Internal ticketing platform starter for construction projects.
    npm --prefix backend install
    ```
 
-3. Generate Prisma client and apply the schema:
+3. Generate the Prisma client and apply migrations:
 
    ```bash
    npm --prefix backend run prisma:generate
-   npm --prefix backend run db:push
+   npm --prefix backend run migrate:deploy
    ```
+
+   When changing `prisma/schema.prisma` locally, create a new migration instead with `npm --prefix backend run migrate:dev`.
 
 4. Start the backend:
 

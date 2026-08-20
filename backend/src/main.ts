@@ -1,17 +1,23 @@
 import { mkdirSync } from 'fs';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { NestExpressApplication } from '@nestjs/platform-express';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { AVATAR_UPLOADS_DIR, UPLOADS_DIR } from './common/uploads.constants';
+import { validateEnv } from './config/env-validation';
 
 async function bootstrap() {
+  const env = validateEnv();
+
+  // Local-disk fallback dirs — only used when no R2_* config is present
+  // (see StorageService), but harmless to create either way.
   mkdirSync(UPLOADS_DIR, { recursive: true });
   mkdirSync(AVATAR_UPLOADS_DIR, { recursive: true });
 
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create(AppModule);
+  app.use(helmet());
   app.enableCors({
-    origin: process.env.FRONTEND_URL?.split(',') ?? true,
+    origin: env.FRONTEND_URL.split(','),
     credentials: true,
   });
   app.useGlobalPipes(
@@ -21,8 +27,14 @@ async function bootstrap() {
       transform: true,
     }),
   );
-  app.useStaticAssets(UPLOADS_DIR, { prefix: '/uploads/' });
 
-  await app.listen(Number(process.env.PORT ?? 3001));
+  await app.listen(env.PORT);
 }
-bootstrap();
+
+bootstrap().catch((error) => {
+  console.error(
+    'Fatal error during startup:\n',
+    error instanceof Error ? error.message : error,
+  );
+  process.exit(1);
+});

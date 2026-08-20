@@ -1,5 +1,3 @@
-import { basename, join } from 'path';
-import { unlink } from 'fs/promises';
 import {
   BadRequestException,
   ForbiddenException,
@@ -9,10 +7,10 @@ import {
 import { Prisma, RoleCode } from '@prisma/client';
 import { extractMentionedUserIds } from '../common/comment-mentions';
 import { sanitizeCommentHtml } from '../common/sanitize-comment-html';
-import { UPLOADS_DIR, UPLOADS_URL_PREFIX } from '../common/uploads.constants';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectHubAccessService } from '../project-hub/project-hub-access.service';
+import { StorageService } from '../storage/storage.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { CreateLinkDto } from './dto/create-link.dto';
 import { CreateSubtaskDto } from './dto/create-subtask.dto';
@@ -176,6 +174,7 @@ export class TicketsService {
     private readonly permissions: TicketsPermissionsService,
     private readonly notifications: NotificationsService,
     private readonly access: ProjectHubAccessService,
+    private readonly storage: StorageService,
   ) {}
 
   async findAll(actor: TicketActor) {
@@ -254,7 +253,9 @@ export class TicketsService {
           },
         },
         attachments: {
-          where: { OR: [{ comment_id: null }, { comment: { deleted_at: null } }] },
+          where: {
+            OR: [{ comment_id: null }, { comment: { deleted_at: null } }],
+          },
           orderBy: [{ uploaded_at: 'asc' }],
           select: attachmentSelect,
         },
@@ -553,13 +554,7 @@ export class TicketsService {
     await this.prisma.ticket.delete({ where: { id } });
 
     await Promise.all(
-      attachments.map(async (attachment) => {
-        try {
-          await unlink(join(UPLOADS_DIR, basename(attachment.file_url)));
-        } catch {
-          // best-effort cleanup: file may already be missing on disk
-        }
-      }),
+      attachments.map((attachment) => this.storage.remove(attachment.file_url)),
     );
 
     return { success: true };
@@ -736,11 +731,17 @@ export class TicketsService {
       }
     }
 
+    const fileUrl = await this.storage.save(
+      file.buffer,
+      file.mimetype,
+      file.originalname,
+    );
+
     return this.prisma.ticketAttachment.create({
       data: {
         ticket_id: ticketId,
         comment_id: commentId ?? null,
-        file_url: `${UPLOADS_URL_PREFIX}/${file.filename}`,
+        file_url: fileUrl,
         file_name: file.originalname,
         file_type: file.mimetype,
         file_size: file.size,
@@ -774,11 +775,7 @@ export class TicketsService {
 
     await this.prisma.ticketAttachment.delete({ where: { id: attachmentId } });
 
-    try {
-      await unlink(join(UPLOADS_DIR, basename(attachment.file_url)));
-    } catch {
-      // best-effort cleanup: file may already be missing on disk
-    }
+    await this.storage.remove(attachment.file_url);
 
     return { success: true };
   }

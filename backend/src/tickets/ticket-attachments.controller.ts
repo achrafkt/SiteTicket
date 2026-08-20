@@ -1,5 +1,3 @@
-import { randomUUID } from 'crypto';
-import { extname } from 'path';
 import {
   BadRequestException,
   Body,
@@ -14,14 +12,12 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { RoleCode } from '@prisma/client';
-import { diskStorage } from 'multer';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { MulterExceptionFilter } from '../common/filters/multer-exception.filter';
 import {
   ALLOWED_ATTACHMENT_MIME_TYPES,
   MAX_ATTACHMENT_SIZE_BYTES,
-  UPLOADS_DIR,
 } from '../common/uploads.constants';
 import { TicketActor, TicketsService } from './tickets.service';
 
@@ -37,12 +33,6 @@ export class TicketAttachmentsController {
   @UseFilters(MulterExceptionFilter)
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: diskStorage({
-        destination: UPLOADS_DIR,
-        filename: (_req, file, callback) => {
-          callback(null, `${randomUUID()}${extname(file.originalname)}`);
-        },
-      }),
       limits: { fileSize: MAX_ATTACHMENT_SIZE_BYTES },
       fileFilter: (_req, file, callback) => {
         if (!ALLOWED_ATTACHMENT_MIME_TYPES.includes(file.mimetype)) {
