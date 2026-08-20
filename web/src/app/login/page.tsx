@@ -141,10 +141,6 @@ export default function LoginPage() {
               <Eye size={18} />
             </div>
 
-            <div className={styles.forgotRow}>
-              <a href="#">Mot de passe oublié ?</a>
-            </div>
-
             <button
               type="submit"
               disabled={loading}

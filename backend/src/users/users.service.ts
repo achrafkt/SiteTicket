@@ -1,5 +1,3 @@
-import { basename, join } from 'path';
-import { unlink } from 'fs/promises';
 import {
   BadRequestException,
   ForbiddenException,
@@ -8,11 +6,8 @@ import {
 } from '@nestjs/common';
 import { Prisma, RoleCode } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
-import {
-  AVATAR_UPLOADS_DIR,
-  AVATAR_URL_PREFIX,
-} from '../common/uploads.constants';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -42,7 +37,10 @@ const userSelect = {
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+  ) {}
 
   findAll() {
     return this.prisma.user.findMany({
@@ -146,9 +144,16 @@ export class UsersService {
   async updateAvatar(id: string, file: Express.Multer.File) {
     const existing = await this.getAvatarUrl(id);
 
+    const avatarUrl = await this.storage.save(
+      file.buffer,
+      file.mimetype,
+      file.originalname,
+      'avatars',
+    );
+
     const updated = await this.prisma.user.update({
       where: { id },
-      data: { avatar_url: `${AVATAR_URL_PREFIX}/${file.filename}` },
+      data: { avatar_url: avatarUrl },
       select: userSelect,
     });
 
@@ -349,11 +354,7 @@ export class UsersService {
   }
 
   private async deleteAvatarFile(avatarUrl: string) {
-    try {
-      await unlink(join(AVATAR_UPLOADS_DIR, basename(avatarUrl)));
-    } catch {
-      // best-effort cleanup: file may already be missing on disk
-    }
+    await this.storage.remove(avatarUrl);
   }
 
   private async getUserGuardInfo(id: string) {

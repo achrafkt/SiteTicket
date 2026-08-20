@@ -350,17 +350,23 @@ export class PrismaSeedService implements OnApplicationBootstrap {
   }
 
   async onApplicationBootstrap() {
+    // Reference data + admin account: the app cannot function without these,
+    // so they always seed (idempotent — upsert/count-checked).
     await this.seedRoles();
     await this.seedTicketTypes();
     await this.seedTicketStatuses();
     await this.seedKnowledgeCategories();
     await this.seedAdminUser();
-    await this.seedMarrakechUsers();
-    await this.seedMarrakechProjects();
-    await this.seedMarrakechProjectMembers();
-    await this.seedMarrakechProjectHub();
-    await this.seedMarrakechTickets();
-    await this.seedMarrakechKnowledgeArticles();
+
+    // Fake Marrakech accounts/chantiers/tickets: opt-in only, never in real prod.
+    if (process.env.SEED_DEMO_DATA === 'true') {
+      await this.seedMarrakechUsers();
+      await this.seedMarrakechProjects();
+      await this.seedMarrakechProjectMembers();
+      await this.seedMarrakechProjectHub();
+      await this.seedMarrakechTickets();
+      await this.seedMarrakechKnowledgeArticles();
+    }
   }
 
   private async seedRoles() {

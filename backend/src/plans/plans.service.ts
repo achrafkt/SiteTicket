@@ -1,12 +1,10 @@
-import { basename, join } from 'path';
-import { unlink } from 'fs/promises';
 import {
   BadRequestException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { UPLOADS_DIR, UPLOADS_URL_PREFIX } from '../common/uploads.constants';
+import { StorageService } from '../storage/storage.service';
 
 const planSelect = {
   id: true,
@@ -36,7 +34,10 @@ export interface CreatePlanInput {
 
 @Injectable()
 export class PlansService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+  ) {}
 
   async findAllForProject(projectId: string) {
     await this.ensureProjectExists(projectId);
@@ -61,13 +62,19 @@ export class PlansService {
       throw new BadRequestException('Le nom du plan est requis.');
     }
 
+    const fileUrl = await this.storage.save(
+      file.buffer,
+      file.mimetype,
+      file.originalname,
+    );
+
     return this.prisma.plan.create({
       data: {
         project_id: projectId,
         name,
         discipline: input.discipline?.trim() || null,
         version: input.version?.trim() || null,
-        file_url: `${UPLOADS_URL_PREFIX}/${file.filename}`,
+        file_url: fileUrl,
         file_type: file.mimetype,
         uploaded_by: userId,
       },
@@ -100,11 +107,7 @@ export class PlansService {
       this.prisma.plan.delete({ where: { id: planId } }),
     ]);
 
-    try {
-      await unlink(join(UPLOADS_DIR, basename(plan.file_url)));
-    } catch {
-      // best-effort cleanup: file may already be missing on disk
-    }
+    await this.storage.remove(plan.file_url);
 
     return { success: true, unpinnedTicketCount };
   }

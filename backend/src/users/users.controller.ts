@@ -1,5 +1,3 @@
-import { randomUUID } from 'crypto';
-import { extname } from 'path';
 import {
   BadRequestException,
   Body,
@@ -18,7 +16,6 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request } from 'express';
-import { diskStorage } from 'multer';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../common/decorators/current-user.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -26,7 +23,6 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { MulterExceptionFilter } from '../common/filters/multer-exception.filter';
 import {
   ALLOWED_AVATAR_MIME_TYPES,
-  AVATAR_UPLOADS_DIR,
   MAX_AVATAR_SIZE_BYTES,
 } from '../common/uploads.constants';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -69,12 +65,6 @@ export class UsersController {
   @UseFilters(MulterExceptionFilter)
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: diskStorage({
-        destination: AVATAR_UPLOADS_DIR,
-        filename: (_req, file, callback) => {
-          callback(null, `${randomUUID()}${extname(file.originalname)}`);
-        },
-      }),
       limits: { fileSize: MAX_AVATAR_SIZE_BYTES },
       fileFilter: (_req, file, callback) => {
         if (!ALLOWED_AVATAR_MIME_TYPES.includes(file.mimetype)) {

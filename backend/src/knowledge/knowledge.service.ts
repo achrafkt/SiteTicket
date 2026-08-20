@@ -1,5 +1,3 @@
-import { basename, join } from 'path';
-import { unlink } from 'fs/promises';
 import {
   BadRequestException,
   Injectable,
@@ -7,8 +5,8 @@ import {
 } from '@nestjs/common';
 import { RoleCode } from '@prisma/client';
 import { canManageKnowledge } from '../common/permissions/knowledge-permissions';
-import { UPLOADS_DIR, UPLOADS_URL_PREFIX } from '../common/uploads.constants';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
 import { CreateKnowledgeArticleDto } from './dto/create-knowledge-article.dto';
 import { UpdateKnowledgeArticleDto } from './dto/update-knowledge-article.dto';
 
@@ -53,7 +51,10 @@ function isVisible(visibleRoles: RoleCode[], actor: KnowledgeActor): boolean {
 
 @Injectable()
 export class KnowledgeService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+  ) {}
 
   findCategories() {
     return this.prisma.knowledgeCategory.findMany({
@@ -148,7 +149,7 @@ export class KnowledgeService {
     await this.prisma.knowledgeArticle.delete({ where: { id } });
 
     if (article.file_url) {
-      await this.deleteFileFromDisk(article.file_url);
+      await this.storage.remove(article.file_url);
     }
 
     return { success: true };
@@ -158,13 +159,19 @@ export class KnowledgeService {
     const article = await this.ensureArticleExists(id);
 
     if (article.file_url) {
-      await this.deleteFileFromDisk(article.file_url);
+      await this.storage.remove(article.file_url);
     }
+
+    const fileUrl = await this.storage.save(
+      file.buffer,
+      file.mimetype,
+      file.originalname,
+    );
 
     return this.prisma.knowledgeArticle.update({
       where: { id },
       data: {
-        file_url: `${UPLOADS_URL_PREFIX}/${file.filename}`,
+        file_url: fileUrl,
         file_name: file.originalname,
         file_type: file.mimetype,
         file_size: file.size,
@@ -180,7 +187,7 @@ export class KnowledgeService {
       throw new BadRequestException("Cet article n'a pas de fichier joint.");
     }
 
-    await this.deleteFileFromDisk(article.file_url);
+    await this.storage.remove(article.file_url);
 
     return this.prisma.knowledgeArticle.update({
       where: { id },
@@ -192,14 +199,6 @@ export class KnowledgeService {
       },
       select: articleSelect,
     });
-  }
-
-  private async deleteFileFromDisk(fileUrl: string) {
-    try {
-      await unlink(join(UPLOADS_DIR, basename(fileUrl)));
-    } catch {
-      // best-effort cleanup: file may already be missing on disk
-    }
   }
 
   private async ensureCategoryExists(categoryId: string) {
