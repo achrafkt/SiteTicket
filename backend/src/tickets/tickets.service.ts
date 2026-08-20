@@ -6,7 +6,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, RoleCode } from '@prisma/client';
+import {
+  Prisma,
+  RoleCode,
+  TicketPriority,
+  TicketStatusCode,
+} from '@prisma/client';
 import { extractMentionedUserIds } from '../common/comment-mentions';
 import { sanitizeCommentHtml } from '../common/sanitize-comment-html';
 import { UPLOADS_DIR, UPLOADS_URL_PREFIX } from '../common/uploads.constants';
@@ -30,6 +35,15 @@ import {
 export interface TicketActor {
   id: string;
   role: RoleCode;
+}
+
+export interface TicketSearchFilters {
+  projectId?: string;
+  statusCode?: TicketStatusCode;
+  priority?: TicketPriority;
+  isBlocking?: boolean;
+  assignedToUserId?: string;
+  limit?: number;
 }
 
 function isPlainObject(
@@ -87,6 +101,25 @@ const linkedTicketSummarySelect = {
   title: true,
   status: {
     select: { code: true, name: true },
+  },
+} as const;
+
+// Deliberately smaller than ticketSelect — this feeds the copilot's tool
+// results straight into the model's context, so it stays limited to the
+// fields a summary/search answer actually needs.
+const ticketSummarySelect = {
+  id: true,
+  ticket_number: true,
+  title: true,
+  priority: true,
+  is_blocking: true,
+  due_date: true,
+  created_at: true,
+  project: { select: { id: true, name: true } },
+  ticket_type: { select: { code: true, name: true } },
+  status: { select: { code: true, name: true, is_terminal: true } },
+  assigned_to_user: {
+    select: { id: true, first_name: true, last_name: true },
   },
 } as const;
 
@@ -219,6 +252,38 @@ export class TicketsService {
     });
   }
 
+  // Used by the copilot's search_tickets tool. Same visibility scoping as
+  // findAll — an explicit projectId is additionally checked with
+  // assertCanView so a filter can't be used to peek into a project the
+  // actor isn't a member of.
+  async search(filters: TicketSearchFilters, actor: TicketActor) {
+    if (filters.projectId) {
+      await this.access.assertCanView(filters.projectId, actor);
+    }
+
+    const projectFilter = await this.access.visibleProjectIdsFilter(actor);
+
+    const where: Prisma.TicketWhereInput = {
+      ...(projectFilter ? { project: projectFilter } : {}),
+      ...(filters.projectId ? { project_id: filters.projectId } : {}),
+      ...(filters.statusCode ? { status: { code: filters.statusCode } } : {}),
+      ...(filters.priority ? { priority: filters.priority } : {}),
+      ...(filters.isBlocking !== undefined
+        ? { is_blocking: filters.isBlocking }
+        : {}),
+      ...(filters.assignedToUserId
+        ? { assigned_to: filters.assignedToUserId }
+        : {}),
+    };
+
+    return this.prisma.ticket.findMany({
+      where,
+      orderBy: [{ created_at: 'desc' }],
+      take: Math.min(filters.limit ?? 20, 50),
+      select: ticketSummarySelect,
+    });
+  }
+
   async findOne(id: string, actor: TicketActor) {
     const canViewInternalComments = this.permissions.canViewInternalComments(
       actor.role,
@@ -254,7 +319,9 @@ export class TicketsService {
           },
         },
         attachments: {
-          where: { OR: [{ comment_id: null }, { comment: { deleted_at: null } }] },
+          where: {
+            OR: [{ comment_id: null }, { comment: { deleted_at: null } }],
+          },
           orderBy: [{ uploaded_at: 'asc' }],
           select: attachmentSelect,
         },

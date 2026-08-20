@@ -83,6 +83,8 @@ model User {
   avatar_url         String?
   is_active          Boolean               @default(true)
   email_notifications_enabled Boolean     @default(true)
+  copilot_message_count      Int         @default(0)
+  copilot_window_started_at  DateTime?
   last_login_at      DateTime?
   created_at         DateTime              @default(now())
   updated_at         DateTime              @updatedAt

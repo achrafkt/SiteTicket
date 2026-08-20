@@ -3,12 +3,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { Sparkles, Send } from 'lucide-react';
 import { Avatar } from '@/components/tickets/Avatar';
+import { CopilotApiError, streamCopilotMessage } from '@/lib/copilot-api';
 import {
   COPILOT_SUGGESTIONS,
   createCopilotMessage,
-  getCopilotMockResponse,
   type CopilotMessage,
-} from '@/lib/copilot-mock';
+} from '@/lib/copilot';
 import type { Person } from '@/types/ticket';
 
 function formatTime(iso: string): string {
@@ -52,14 +52,49 @@ export function CopilotChat({ currentUser }: { currentUser: Person }) {
     const trimmed = text.trim();
     if (!trimmed || isThinking) return;
 
+    // Bounded to limit tokens sent per request — older turns fall out of
+    // context but keeping the whole session isn't needed for this use case.
+    const MAX_HISTORY_MESSAGES = 20;
+    const history = messages
+      .slice(-MAX_HISTORY_MESSAGES)
+      .map((m) => ({ role: m.role, content: m.content }));
     setMessages((prev) => [...prev, createCopilotMessage('user', trimmed)]);
     setInput('');
     setIsThinking(true);
 
-    const reply = await getCopilotMockResponse(trimmed);
-    setMessages((prev) => [...prev, createCopilotMessage('assistant', reply)]);
-    setIsThinking(false);
-    textareaRef.current?.focus();
+    const assistantMessage = createCopilotMessage('assistant', '');
+    let hasReceivedDelta = false;
+
+    try {
+      await streamCopilotMessage(trimmed, history, {
+        onDelta: (delta) => {
+          if (!hasReceivedDelta) {
+            hasReceivedDelta = true;
+            setIsThinking(false);
+            setMessages((prev) => [...prev, assistantMessage]);
+          }
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMessage.id ? { ...m, content: m.content + delta } : m,
+            ),
+          );
+        },
+      });
+    } catch (err) {
+      const errorText =
+        err instanceof CopilotApiError
+          ? err.message
+          : 'Le copilote a rencontré une erreur. Merci de réessayer.';
+      setIsThinking(false);
+      setMessages((prev) =>
+        hasReceivedDelta
+          ? prev.map((m) => (m.id === assistantMessage.id ? { ...m, content: errorText } : m))
+          : [...prev, createCopilotMessage('assistant', errorText)],
+      );
+    } finally {
+      setIsThinking(false);
+      textareaRef.current?.focus();
+    }
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -97,7 +132,8 @@ export function CopilotChat({ currentUser }: { currentUser: Person }) {
             <div>
               <p className="text-sm font-medium text-gray-900">Comment puis-je vous aider aujourd&apos;hui ?</p>
               <p className="mt-1 max-w-sm text-xs text-gray-500">
-                Cette version du copilote fonctionne avec des réponses simulées, à titre de démonstration.
+                Le copilote répond à partir de vos chantiers, tickets et budgets réels, dans la limite de
+                vos droits d&apos;accès.
               </p>
             </div>
             <div className="flex w-full max-w-md flex-col gap-2">
@@ -173,7 +209,7 @@ export function CopilotChat({ currentUser }: { currentUser: Person }) {
           </button>
         </div>
         <p className="mt-1.5 px-1 text-[10px] text-gray-400">
-          Version bêta — réponses simulées, non connectées à vos données réelles.
+          Version bêta — les réponses peuvent contenir des erreurs, vérifiez les informations sensibles.
         </p>
       </div>
     </div>

@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AuthModule } from './auth/auth.module';
+import { CopilotModule } from './copilot/copilot.module';
 import { HealthModule } from './health/health.module';
 import { KnowledgeModule } from './knowledge/knowledge.module';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -32,6 +33,7 @@ import { UsersModule } from './users/users.module';
     AnalyticsModule,
     NotificationsModule,
     PlansModule,
+    CopilotModule,
   ],
 })
 export class AppModule {}
