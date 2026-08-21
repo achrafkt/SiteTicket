@@ -3,7 +3,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Sparkles, Send } from 'lucide-react';
 import { Avatar } from '@/components/tickets/Avatar';
-import { CopilotApiError, streamCopilotMessage } from '@/lib/copilot-api';
+import {
+  CopilotApiError,
+  getCopilotConversation,
+  streamCopilotMessage,
+} from '@/lib/copilot-api';
 import {
   COPILOT_SUGGESTIONS,
   createCopilotMessage,
@@ -37,12 +41,62 @@ function AssistantAvatar() {
   );
 }
 
-export function CopilotChat({ currentUser }: { currentUser: Person }) {
+export function CopilotChat({
+  currentUser,
+  conversationId,
+  onConversationId,
+  onExchangeComplete,
+}: {
+  currentUser: Person;
+  conversationId: string | null;
+  onConversationId: (id: string) => void;
+  onExchangeComplete: () => void;
+}) {
   const [messages, setMessages] = useState<CopilotMessage[]>([]);
   const [input, setInput] = useState('');
   const [isThinking, setIsThinking] = useState(false);
+  const [isLoadingConversation, setIsLoadingConversation] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Mirrors the conversationId prop but updates synchronously the moment the
+  // server confirms one (SSE 'conversation' event) — sendMessage reads this
+  // instead of the prop so a rapid second message in a brand-new
+  // conversation still targets the right id before the parent re-renders.
+  const activeConversationIdRef = useRef<string | null>(conversationId);
+
+  useEffect(() => {
+    activeConversationIdRef.current = conversationId;
+
+    if (!conversationId) {
+      setMessages([]);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingConversation(true);
+    getCopilotConversation(conversationId)
+      .then((conversation) => {
+        if (cancelled) return;
+        setMessages(
+          conversation.messages.map((m) => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            createdAt: m.created_at,
+          })),
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setMessages([]);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingConversation(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [conversationId]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -52,12 +106,6 @@ export function CopilotChat({ currentUser }: { currentUser: Person }) {
     const trimmed = text.trim();
     if (!trimmed || isThinking) return;
 
-    // Bounded to limit tokens sent per request — older turns fall out of
-    // context but keeping the whole session isn't needed for this use case.
-    const MAX_HISTORY_MESSAGES = 20;
-    const history = messages
-      .slice(-MAX_HISTORY_MESSAGES)
-      .map((m) => ({ role: m.role, content: m.content }));
     setMessages((prev) => [...prev, createCopilotMessage('user', trimmed)]);
     setInput('');
     setIsThinking(true);
@@ -66,7 +114,13 @@ export function CopilotChat({ currentUser }: { currentUser: Person }) {
     let hasReceivedDelta = false;
 
     try {
-      await streamCopilotMessage(trimmed, history, {
+      await streamCopilotMessage(trimmed, activeConversationIdRef.current ?? undefined, {
+        onConversationId: (id) => {
+          if (activeConversationIdRef.current !== id) {
+            activeConversationIdRef.current = id;
+            onConversationId(id);
+          }
+        },
         onDelta: (delta) => {
           if (!hasReceivedDelta) {
             hasReceivedDelta = true;
@@ -80,6 +134,7 @@ export function CopilotChat({ currentUser }: { currentUser: Person }) {
           );
         },
       });
+      onExchangeComplete();
     } catch (err) {
       const errorText =
         err instanceof CopilotApiError
@@ -104,7 +159,7 @@ export function CopilotChat({ currentUser }: { currentUser: Person }) {
     }
   }
 
-  const isEmpty = messages.length === 0;
+  const isEmpty = messages.length === 0 && !isLoadingConversation;
 
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
@@ -124,7 +179,11 @@ export function CopilotChat({ currentUser }: { currentUser: Person }) {
       </header>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-4">
-        {isEmpty ? (
+        {isLoadingConversation ? (
+          <div className="flex h-full items-center justify-center">
+            <p className="text-xs text-gray-400">Chargement de la conversation…</p>
+          </div>
+        ) : isEmpty ? (
           <div className="flex h-full flex-col items-center justify-center gap-5 text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-nav-bg-active/10">
               <Sparkles size={24} strokeWidth={1.75} className="text-nav-accent" />

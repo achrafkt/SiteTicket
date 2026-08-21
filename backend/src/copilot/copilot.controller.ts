@@ -32,6 +32,11 @@ export class CopilotController {
       return;
     }
 
-    await this.copilotService.streamReply(actor, dto.message, dto.history, res);
+    await this.copilotService.streamReply(
+      actor,
+      dto.message,
+      dto.conversationId,
+      res,
+    );
   }
 }

@@ -9,7 +9,7 @@ import { GoogleGenAI } from '@google/genai';
 import type { Content, FunctionCall, Part } from '@google/genai';
 import type { Response } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
-import { CopilotHistoryMessageDto } from './dto/send-copilot-message.dto';
+import { CopilotConversationsService } from './copilot-conversations.service';
 import { CopilotActor, CopilotToolsService } from './copilot-tools.service';
 
 const MODEL = 'gemini-3.5-flash-lite';
@@ -53,6 +53,7 @@ export class CopilotService {
     config: ConfigService,
     private readonly prisma: PrismaService,
     private readonly tools: CopilotToolsService,
+    private readonly conversations: CopilotConversationsService,
   ) {
     this.apiKey = config.get<string>('GEMINI_API_KEY') || undefined;
     this.dailyMessageLimit = Number(
@@ -107,9 +108,29 @@ export class CopilotService {
   async streamReply(
     actor: CopilotActor,
     message: string,
-    history: CopilotHistoryMessageDto[],
+    conversationId: string | undefined,
     res: Response,
   ): Promise<void> {
+    // Resolved before any SSE header is written, so an unknown/foreign
+    // conversationId surfaces as a normal 404 JSON response (via Nest's
+    // exception handling) instead of a fake-200 SSE error event.
+    let conversationIdResolved: string;
+    let historyContents: Content[] = [];
+    if (conversationId) {
+      const conversation = await this.conversations.getOwned(
+        conversationId,
+        actor.id,
+      );
+      conversationIdResolved = conversation.id;
+      historyContents = conversation.messages.map((m) => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content }],
+      }));
+    } else {
+      const conversation = await this.conversations.create(actor.id, message);
+      conversationIdResolved = conversation.id;
+    }
+
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
@@ -118,13 +139,15 @@ export class CopilotService {
       res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     };
 
+    send('conversation', { id: conversationIdResolved });
+    await this.conversations.appendMessage(conversationIdResolved, 'user', message);
+
     const contents: Content[] = [
-      ...history.map((h) => ({
-        role: h.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: h.content }],
-      })),
+      ...historyContents,
       { role: 'user', parts: [{ text: message }] },
     ];
+
+    let assistantText = '';
 
     try {
       const client = this.getClient();
@@ -147,6 +170,7 @@ export class CopilotService {
         const turnParts: Part[] = [];
         for await (const chunk of stream) {
           if (chunk.text) {
+            assistantText += chunk.text;
             send('delta', { text: chunk.text });
           }
           const candidateParts = chunk.candidates?.[0]?.content?.parts;
@@ -170,6 +194,13 @@ export class CopilotService {
           continue;
         }
 
+        if (assistantText.trim()) {
+          await this.conversations.appendMessage(
+            conversationIdResolved,
+            'assistant',
+            assistantText,
+          );
+        }
         send('done', {});
         res.end();
         return;

@@ -1,10 +1,35 @@
-import { API_URL } from './api';
+import { apiFetch, API_URL } from './api';
 
 const TOKEN_KEY = 'site-ticket-token';
 
-export interface CopilotHistoryMessage {
-  role: 'user' | 'assistant';
-  content: string;
+export interface CopilotConversationSummary {
+  id: string;
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CopilotConversationDetail extends CopilotConversationSummary {
+  messages: Array<{
+    id: string;
+    role: 'user' | 'assistant';
+    content: string;
+    created_at: string;
+  }>;
+}
+
+export function listCopilotConversations(): Promise<CopilotConversationSummary[]> {
+  return apiFetch<CopilotConversationSummary[]>('/copilot/conversations');
+}
+
+export function getCopilotConversation(id: string): Promise<CopilotConversationDetail> {
+  return apiFetch<CopilotConversationDetail>(`/copilot/conversations/${id}`);
+}
+
+export function deleteCopilotConversation(id: string): Promise<{ success: boolean }> {
+  return apiFetch<{ success: boolean }>(`/copilot/conversations/${id}`, {
+    method: 'DELETE',
+  });
 }
 
 export class CopilotApiError extends Error {
@@ -26,6 +51,10 @@ function handleUnauthorized() {
 
 interface StreamCopilotMessageOptions {
   onDelta: (text: string) => void;
+  // Fired once, early in the stream: the id of the conversation the message
+  // was persisted into — the caller's own id when continuing one, or a
+  // freshly created one when conversationId wasn't passed in.
+  onConversationId: (id: string) => void;
   signal?: AbortSignal;
 }
 
@@ -34,8 +63,8 @@ interface StreamCopilotMessageOptions {
 // progressively via a ReadableStream reader.
 export async function streamCopilotMessage(
   message: string,
-  history: CopilotHistoryMessage[],
-  { onDelta, signal }: StreamCopilotMessageOptions,
+  conversationId: string | undefined,
+  { onDelta, onConversationId, signal }: StreamCopilotMessageOptions,
 ): Promise<void> {
   const token = typeof window !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : null;
 
@@ -45,13 +74,17 @@ export async function streamCopilotMessage(
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ message, history }),
+    body: JSON.stringify({ message, conversationId }),
     signal,
   });
 
   if (response.status === 401) {
     handleUnauthorized();
     throw new CopilotApiError('Session expirée, merci de vous reconnecter.', 401);
+  }
+
+  if (response.status === 404) {
+    throw new CopilotApiError('Cette conversation est introuvable.', 404);
   }
 
   if (response.status === 429) {
@@ -90,9 +123,12 @@ export async function streamCopilotMessage(
       const data = JSON.parse(dataLine.slice('data: '.length)) as {
         text?: string;
         message?: string;
+        id?: string;
       };
 
-      if (eventType === 'delta' && typeof data.text === 'string') {
+      if (eventType === 'conversation' && typeof data.id === 'string') {
+        onConversationId(data.id);
+      } else if (eventType === 'delta' && typeof data.text === 'string') {
         onDelta(data.text);
       } else if (eventType === 'error') {
         throw new CopilotApiError(

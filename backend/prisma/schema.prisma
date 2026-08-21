@@ -104,6 +104,7 @@ model User {
   project_activity_logs ProjectActivityLogEntry[] @relation("ProjectActivityLogActor")
   notifications_received Notification[]      @relation("NotificationRecipient")
   notifications_triggered Notification[]     @relation("NotificationActor")
+  copilot_conversations CopilotConversation[]
 
   @@map("users")
 }
@@ -404,6 +405,36 @@ model Notification {
   @@index([recipient_id, read_at])
   @@index([recipient_id, created_at])
   @@map("notifications")
+}
+
+enum CopilotMessageRole {
+  user
+  assistant
+}
+
+model CopilotConversation {
+  id         String             @id @default(uuid()) @db.Uuid
+  user_id    String             @db.Uuid
+  title      String?
+  created_at DateTime           @default(now())
+  updated_at DateTime           @updatedAt
+  user       User               @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  messages   CopilotMessage[]
+
+  @@index([user_id, updated_at])
+  @@map("copilot_conversations")
+}
+
+model CopilotMessage {
+  id              String              @id @default(uuid()) @db.Uuid
+  conversation_id String              @db.Uuid
+  role            CopilotMessageRole
+  content         String
+  created_at      DateTime            @default(now())
+  conversation    CopilotConversation @relation(fields: [conversation_id], references: [id], onDelete: Cascade)
+
+  @@index([conversation_id, created_at])
+  @@map("copilot_messages")
 }
 
 enum KnowledgeCategoryCode {
