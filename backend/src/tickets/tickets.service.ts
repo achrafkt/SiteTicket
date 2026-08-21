@@ -477,6 +477,12 @@ export class TicketsService {
   ) {
     const userId = actor.id;
     const ticket = await this.getAuthorizationContext(id);
+    // Additional to (never instead of) the scope check below: 'own_ticket',
+    // 'assigned_ticket' and 'ticket_type_safety' never verify chantier
+    // membership on their own, so a chantier-scoped role (qse, chef_chantier,
+    // sous_traitant, observateur) could otherwise act on a ticket outside
+    // every chantier they belong to. No-op for broad-view roles.
+    await this.access.assertCanView(ticket.project_id, actor);
 
     const isAssigning = updateTicketDto.assignedTo !== undefined;
     const isModifyingOtherFields = MODIFIABLE_TICKET_FIELDS.some(
@@ -602,6 +608,8 @@ export class TicketsService {
 
   async remove(id: string, actor: TicketActor) {
     const ticket = await this.getAuthorizationContext(id);
+    // See update() — 'own_ticket' alone never verifies chantier membership.
+    await this.access.assertCanView(ticket.project_id, actor);
 
     if (
       !(await this.permissions.canDeleteTicket(actor.role, actor.id, ticket))
