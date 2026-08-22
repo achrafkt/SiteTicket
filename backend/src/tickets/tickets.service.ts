@@ -1061,6 +1061,10 @@ export class TicketsService {
 
   private async ensureCanModify(id: string, actor: TicketActor) {
     const ticket = await this.getAuthorizationContext(id);
+    // Same gap as update()/remove(): 'own_ticket', 'assigned_ticket' and
+    // 'ticket_type_safety' never verify chantier membership on their own.
+    // No-op for broad-view roles (admin, moa, moe, conducteur_travaux).
+    await this.access.assertCanView(ticket.project_id, actor);
 
     if (
       !(await this.permissions.canModifyTicket(actor.role, actor.id, ticket))
